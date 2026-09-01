@@ -339,6 +339,10 @@ databricks jobs run-now --job-id "$(terraform -chdir=infra output -raw wikipedia
 | Terraform: `databricks CLI not found` | `.bin` not on PATH; the provider shells out to the CLI for OAuth | `source scripts/env.sh` |
 | dbt: `Env var required but not provided` | Connection variables not set | `source scripts/env.sh` |
 | Terraform: `Metastore storage root URL does not exist` | The catalog is being created through the REST API instead of SQL | Expected on Free Edition — see [SPEC.md](SPEC.md) §7 |
-| Job fails cloning the repo | No Git credential registered in Databricks | Run `databricks git-credentials create`, above |
+| Job fails `REPOSITORY_CHECKOUT_FAILED` / `UNAUTHENTICATED` | No Git credential linked in Databricks | Settings → Linked accounts → link GitHub |
+| Job fails `REPOSITORY_CHECKOUT_FAILED` / `PERMISSION_DENIED` | Account linked, but the Databricks GitHub App is not installed on the repository | Install at github.com/apps/databricks/installations/new; if scoped to selected repositories, add this one |
+| Job task fails `dbt: command not found` | Serverless environments start empty | Declare the adapter in the environment's `dependencies` — `dbt_databricks_version` handles this |
+| dbt fails `UC_HIVE_METASTORE_DISABLED_EXCEPTION` | A dbt task generates its own profile and ignores `profiles.yml`; with no catalog it falls back to the legacy metastore | Set `catalog` and `schema` on the `dbt_task` block |
+| Runs silently missing, `MAX_CONCURRENT_RUNS_EXCEEDED` | The schedule fires faster than a run completes; with concurrency capped at one the trigger is dropped, not queued | Widen `ingest_schedule_cron` or shorten `ingest_window_seconds` |
 | Streaming table returns zero rows | No files have landed yet | Run the ingest task first, then `dbt build -s st_wikipedia_edits+` |
 | dbt model exists but is empty after a code change | Incremental model kept its old rows | `dbt build -s <model> --full-refresh` |

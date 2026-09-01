@@ -356,10 +356,12 @@ managed by the Databricks CLI. `terraform.tfvars` and `.env` are gitignored;
 
 ## 9. Current state
 
-Provisioned and verified against the live workspace:
+Provisioned and verified against the live workspace.
 
-- Terraform: catalog `dev_lakehouse`, schemas `staging` and `marts`, grants
-- dbt: 5 staging views, 3 marts, 32 tests — `dbt build` passes 40/40
+**Terraform** — catalog `dev_lakehouse`; schemas `raw`, `staging`, `marts`;
+grants; the `landing` volume; and the `dev-lakehouse-wikipedia` job.
+
+**Batch path** — `dbt build` passes 40/40.
 
 | Model | Rows |
 |---|---|
@@ -367,10 +369,26 @@ Provisioned and verified against the live workspace:
 | `fct_orders` | 7,500,000 |
 | `agg_sales_by_month` | 2,000 |
 
+**Streaming path** — the job runs end to end on Databricks: it clones this
+repository, consumes the firehose, and rebuilds the models. Last verified run
+landed 5 files and 1,981 events, then passed 15/15 tests.
+
+| Model | Rows |
+|---|---|
+| `st_wikipedia_edits` | grows with each run |
+| `fct_wikipedia_edits` | 7,495 across 27 minutes of stream |
+| `agg_wikipedia_activity` | 50 |
+
+Observed steady-state latency, edit to queryable row, is roughly 150 seconds:
+the ingestion flush interval plus the dbt build. Averages over the whole table
+are much higher, because files landed by earlier failed runs sat unread until
+one later run consumed them all at once — which is itself the point of an Auto
+Loader streaming table, and visible in the data rather than hidden.
+
 ## 10. Not built yet
 
 - A `prod` environment, to demonstrate dev → prod promotion
-- A Databricks job running `dbt build` on a schedule, provisioned by Terraform
-  (the jobs API does work on Free Edition)
 - `dbt docs` published as a static site
 - A remote Terraform state backend — state is currently local
+- Continuous mode has never been run for a sustained period, so its real cost
+  against the Free Edition allowance is still an estimate, not a measurement
