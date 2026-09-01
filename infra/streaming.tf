@@ -106,9 +106,15 @@ resource "databricks_job" "wikipedia" {
     }
 
     dbt_task {
-      project_directory  = "transform"
-      profiles_directory = "transform"
-      warehouse_id       = data.databricks_sql_warehouse.this.id
+      project_directory = "transform"
+      warehouse_id      = data.databricks_sql_warehouse.this.id
+
+      # A dbt task generates its own profile and ignores the one in the repo,
+      # so the catalog has to be declared here. Without it dbt falls back to the
+      # legacy Hive metastore and fails with UC_HIVE_METASTORE_DISABLED_EXCEPTION
+      # on any Unity Catalog workspace.
+      catalog = local.catalog_name
+      schema  = "staging"
 
       commands = [
         "dbt deps",
