@@ -56,17 +56,33 @@ resource "databricks_job" "wikipedia" {
   # Overlapping runs would land duplicate files and race the dbt build.
   max_concurrent_runs = 1
 
+  # Two environments rather than one. The ingestion task needs nothing beyond
+  # the standard library, and making it wait for dbt and its dependency tree to
+  # install would delay the moment the stream connection opens.
   environment {
-    environment_key = "default"
+    environment_key = "ingest"
 
     spec {
       client = "3"
     }
   }
 
+  environment {
+    environment_key = "dbt"
+
+    spec {
+      client = "3"
+
+      # Serverless job compute starts empty: without this the task fails with
+      # "dbt: command not found". Pinned to match pyproject.toml so a run on
+      # Databricks resolves the same version as a run on a laptop.
+      dependencies = ["dbt-databricks==${var.dbt_databricks_version}"]
+    }
+  }
+
   task {
     task_key        = "ingest"
-    environment_key = "default"
+    environment_key = "ingest"
 
     notebook_task {
       notebook_path = "ingest/wikipedia_stream"
@@ -83,7 +99,7 @@ resource "databricks_job" "wikipedia" {
 
   task {
     task_key        = "transform"
-    environment_key = "default"
+    environment_key = "dbt"
 
     depends_on {
       task_key = "ingest"

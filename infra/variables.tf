@@ -111,3 +111,13 @@ variable "wikis" {
   type        = string
   default     = "enwiki,ptwiki"
 }
+
+variable "dbt_databricks_version" {
+  description = <<-EOT
+    Version of dbt-databricks installed into the job's serverless environment.
+    Keep this in step with the pin in pyproject.toml so a run on Databricks and
+    a run on a laptop resolve the same adapter.
+  EOT
+  type        = string
+  default     = "1.12.4"
+}
