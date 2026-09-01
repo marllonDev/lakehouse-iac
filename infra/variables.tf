@@ -85,9 +85,18 @@ variable "streaming_mode" {
 }
 
 variable "ingest_schedule_cron" {
-  description = "Quartz cron for the ingestion job in triggered mode. Default is every 5 minutes."
+  description = <<-EOT
+    Quartz cron for the ingestion job in triggered mode.
+
+    The interval must exceed a full run: ingest_window_seconds, plus serverless
+    startup, plus the dbt build. Measured against this workspace, a 300-second
+    window completes in roughly eight minutes end to end, so the default leaves
+    a wide margin. Set it too short and runs overlap; because the job caps
+    concurrency at one, the overlapping run is dropped with
+    MAX_CONCURRENT_RUNS_EXCEEDED rather than queued, and the gap goes unnoticed.
+  EOT
   type        = string
-  default     = "0 0/5 * * * ?"
+  default     = "0 0/15 * * * ?"
 }
 
 variable "ingest_window_seconds" {
@@ -97,7 +106,7 @@ variable "ingest_window_seconds" {
     Ignored in continuous mode, where the task is told to run forever.
   EOT
   type        = number
-  default     = 180
+  default     = 300
 }
 
 variable "ingest_batch_seconds" {
