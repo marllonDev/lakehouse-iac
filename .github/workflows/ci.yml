@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.0
+
+      # No credentials in CI, so this checks syntax and provider schemas only.
+      # Anything that needs a live workspace runs from a developer machine.
+      - name: terraform fmt
+        run: terraform -chdir=infra fmt -check -recursive
+
+      - name: terraform validate
+        run: |
+          terraform -chdir=infra init -backend=false -input=false
+          terraform -chdir=infra validate
+
+      - name: install dbt
+        run: uv sync --frozen
+
+      - name: dbt parse
+        env:
+          DATABRICKS_HOST: https://example.cloud.databricks.com
+          DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/placeholder
+          DBT_PROFILES_DIR: transform
+          DBT_CATALOG: dev_lakehouse
+        run: uv run dbt parse --no-partial-parse --project-dir transform

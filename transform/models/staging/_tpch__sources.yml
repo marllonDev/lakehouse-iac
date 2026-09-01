@@ -1,0 +1,17 @@
+version: 2
+
+sources:
+  - name: tpch
+    description: >
+      Read-only TPC-H dataset that ships with every Databricks workspace in the
+      `samples` catalog. Used here so the project has a realistic multi-table
+      source without needing an ingestion pipeline.
+    catalog: samples
+    schema: tpch
+
+    tables:
+      - name: customer
+      - name: orders
+      - name: lineitem
+      - name: nation
+      - name: region

@@ -1,0 +1,33 @@
+# Vendored tooling (rebuild with: bash tools/ai-dev-kit/databricks-mcp-server/setup.sh)
+tools/ai-dev-kit/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# dbt
+transform/target/
+transform/dbt_packages/
+transform/logs/
+.user.yml
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Secrets
+.env
+
+# Vendored Databricks agent skills (reinstall with: bash scripts/bootstrap.sh)
+.claude/skills/
+
+# Project-local CLIs
+.bin/
+
+# macOS
+.DS_Store

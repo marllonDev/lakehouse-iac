@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: One row per customer, renamed and recast from samples.tpch.customer.
+    columns:
+      - name: customer_key
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: nation_key
+        data_tests:
+          - relationships:
+              arguments:
+                  to: ref('stg_nations')
+                  field: nation_key
+      - name: market_segment
+        data_tests:
+          - accepted_values:
+              arguments:
+                  values: [AUTOMOBILE, BUILDING, FURNITURE, HOUSEHOLD, MACHINERY]
+
+  - name: stg_orders
+    description: One row per customer order.
+    columns:
+      - name: order_key
+        data_tests: [unique, not_null]
+      - name: customer_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                  to: ref('stg_customers')
+                  field: customer_key
+      - name: order_status
+        description: Decoded from the single-letter TPC-H status code.
+        data_tests:
+          - accepted_values:
+              arguments:
+                  values: [open, fulfilled, partial]
+
+  - name: stg_order_lines
+    description: One row per line within an order. The grain of the sales fact.
+    columns:
+      - name: order_line_key
+        description: Surrogate key over (order_key, line_number).
+        data_tests: [unique, not_null]
+      - name: order_key
+        data_tests:
+          - relationships:
+              arguments:
+                  to: ref('stg_orders')
+                  field: order_key
+      - name: quantity
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                  min_value: 0
+                  inclusive: false
+
+  - name: stg_nations
+    columns:
+      - name: nation_key
+        data_tests: [unique, not_null]
+      - name: region_key
+        data_tests:
+          - relationships:
+              arguments:
+                  to: ref('stg_regions')
+                  field: region_key
+
+  - name: stg_regions
+    columns:
+      - name: region_key
+        data_tests: [unique, not_null]
+      - name: region_name
+        data_tests: [unique, not_null]

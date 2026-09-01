@@ -1,0 +1,33 @@
+name: lakehouse
+version: "1.0.0"
+config-version: 2
+
+profile: lakehouse
+
+# The volume the ingestion task lands Wikimedia events into. Terraform creates
+# the volume and this path must match; it is passed to the job as a parameter
+# from a Terraform output, so the two cannot drift silently.
+vars:
+  wikipedia_landing_path: "/Volumes/dev_lakehouse/raw/landing/wikipedia"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  lakehouse:
+    # Terraform creates the schemas; dbt only creates relations inside them.
+    # generate_schema_name is overridden in macros/ so these map to the bare
+    # schema names rather than dbt's default "<target_schema>_<custom>" form.
+    staging:
+      +schema: staging
+      +materialized: view
+    streaming:
+      +schema: staging
+    marts:
+      +schema: marts
+      +materialized: table
