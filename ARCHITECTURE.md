@@ -8,52 +8,36 @@ the project folder by folder. This file is the picture that ties both together.
 
 ## 1. System overview
 
+This is deliberately the *static* picture — what exists and what contains
+what. The *dynamic* picture, what happens when the job actually runs, is §6's
+sequence diagram; splitting the two keeps either one readable.
+
 ```mermaid
-flowchart TB
-    subgraph gh["GitHub — marllonDev/lakehouse-iac"]
-        repo["main branch<br/>infra/ · transform/ · ingest/"]
+flowchart LR
+    repo["GitHub<br/>marllonDev/lakehouse-iac"]
+    human["terraform apply<br/>(run by a human, not CI)"]
+
+    subgraph dbx ["Databricks Free Edition — catalog dev_lakehouse"]
+        raw[("schema: raw<br/>volume: landing")]
+        staging[("schema: staging<br/>5 views + 1 streaming table")]
+        marts[("schema: marts<br/>5 tables")]
+        wh["SQL Warehouse<br/>Serverless Starter<br/>(looked up, not created)"]
+        job["Job: dev-lakehouse-wikipedia<br/>every 15 min"]
     end
 
-    subgraph tf["Terraform (local, human-run)"]
-        apply["terraform apply"]
-    end
+    tpch["samples.tpch<br/>(built into the workspace)"]
+    wiki["stream.wikimedia.org<br/>recentchange firehose"]
 
-    subgraph dbx["Databricks Free Edition workspace"]
-        direction TB
+    repo --> human
+    human ==>|"creates catalog, schemas,<br/>grants, volume, job"| dbx
+    job -.->|"clones at run time"| repo
 
-        subgraph uc["Unity Catalog — dev_lakehouse"]
-            raw["schema: raw<br/>volume: landing"]
-            staging["schema: staging<br/>5 views + 1 streaming table"]
-            marts["schema: marts<br/>5 tables"]
-        end
-
-        job["Job: dev-lakehouse-wikipedia<br/>schedule: every 15 min"]
-        wh["SQL Warehouse<br/>Serverless Starter (fixed, looked up)"]
-    end
-
-    subgraph ext["Outside Databricks"]
-        tpch["samples.tpch<br/>(built into every workspace)"]
-        wiki["stream.wikimedia.org<br/>recentchange firehose"]
-    end
-
-    repo -- "1. terraform init/apply, run once by a human" --> apply
-    apply -- "2. creates catalog, schemas, grants, volume, job" --> uc
-    apply -- "creates" --> job
-
-    job -- "3. clones repo via git_source at run time" --> repo
-    job -- "4. task: ingest" --> wiki
-    wiki -- "SSE events, batched every 60s" --> raw
-    job -- "5. task: transform (dbt build)" --> wh
-    wh -- "reads/writes" --> uc
-    tpch -- "read directly, no copy" --> staging
-
-    raw -- "Auto Loader, incremental" --> staging
-    staging -- "merge, incremental" --> marts
-
-    style gh fill:#24292e,color:#fff
-    style tf fill:#5c4ee5,color:#fff
-    style job fill:#ff3621,color:#fff
-    style wh fill:#ff3621,color:#fff
+    wiki --> job
+    job --> raw
+    tpch --> staging
+    raw -->|"Auto Loader, incremental"| staging
+    staging -->|"merge, incremental"| marts
+    wh --- job
 ```
 
 Two data paths share one platform:

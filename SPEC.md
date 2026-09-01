@@ -394,7 +394,6 @@ Loader streaming table, and visible in the data rather than hidden.
 ## 10. Not built yet
 
 - A `prod` environment, to demonstrate dev → prod promotion
-- `dbt docs` published as a static site
 - A remote Terraform state backend — state is currently local
 - Continuous mode has never been run for a sustained period, so its real cost
   against the Free Edition allowance is still an estimate, not a measurement

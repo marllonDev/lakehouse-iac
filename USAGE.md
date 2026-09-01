@@ -184,8 +184,22 @@ dbt build -s st_wikipedia_edits+   # the streaming table and everything downstre
 dbt build --full-refresh       # rebuild incremental models from scratch
 
 dbt compile -s fct_orders      # write the final SQL to target/ without running it
-dbt docs generate && dbt docs serve   # browsable docs with a lineage graph
+dbt docs generate && dbt docs serve   # browsable docs with a lineage graph, local only
 ```
+
+### Publishing docs
+
+```bash
+source scripts/env.sh
+scripts/publish-docs.sh
+```
+
+Generates the docs site with a live connection — real column types and table
+stats, not just what the YAML declares — and pushes it to the `gh-pages`
+branch, which GitHub Pages serves directly. Run by hand, deliberately: this is
+the same boundary that keeps Databricks credentials out of CI, drawn again for
+docs. One-time setup: Settings → Pages → Source: Deploy from a branch →
+`gh-pages` / `(root)`.
 
 `dbt compile` is the debugging tool: it shows the exact SQL that will be sent,
 with every `ref()` resolved to a real table name.
