@@ -32,6 +32,7 @@ one would drop what the other created, and the state would drift.
 lakehouse-iac/
 ├── infra/                    ← Terraform. The containers.
 │   ├── main.tf                  catalog, schemas, grants, warehouse lookup
+│   ├── streaming.tf             landing volume and the Wikimedia ingestion job
 │   ├── variables.tf             the knobs you can turn
 │   ├── outputs.tf               values Terraform hands back (e.g. the dbt http_path)
 │   ├── providers.tf             how Terraform authenticates to Databricks
@@ -44,12 +45,17 @@ lakehouse-iac/
 │   ├── macros/                  reusable Jinja; here, the schema-naming override
 │   └── models/
 │       ├── staging/             one view per source table
+│       ├── streaming/           the Auto Loader streaming table
 │       └── marts/               the business-facing tables
+│
+├── ingest/                   ← Python. The only part dbt cannot do.
+│   └── wikipedia_stream.py      holds the SSE connection open, lands JSON files
 │
 ├── scripts/                  ← Operational glue.
 │   ├── install-tools.sh         downloads terraform + databricks CLI + dbt into the repo
 │   ├── env.sh                   puts them on PATH and sets connection env vars
 │   ├── uc-catalog.sh            creates/drops the catalog over SQL (see §7)
+│   ├── install-tools.sh         downloads the pinned CLIs into the repository
 │   └── bootstrap.sh             installs the AI agent skills and MCP server (optional)
 │
 ├── .bin/                     ← terraform + databricks binaries      (gitignored)

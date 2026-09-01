@@ -89,10 +89,11 @@ Almost everything is a variable. To change behaviour, edit the `default` in
 | `git_repo_url` | this repo | Where the job clones the dbt project from at run time. |
 | `git_branch` | `main` | Which branch the job runs. |
 | `streaming_mode` | `triggered` | `triggered` = scheduled runs. `continuous` = never exits, true real time. |
-| `ingest_schedule_cron` | every 5 min | Quartz cron, used only in `triggered` mode. |
-| `ingest_window_seconds` | `180` | How long one triggered run consumes the firehose. Keep below the schedule interval. |
+| `ingest_schedule_cron` | every 15 min | Quartz cron, used only in `triggered` mode. Must exceed a full run. |
+| `ingest_window_seconds` | `300` | How long one triggered run consumes the firehose. Keep well below the schedule interval. |
 | `ingest_batch_seconds` | `60` | How often ingestion flushes a landing file. |
 | `wikis` | `enwiki,ptwiki` | Which wikis to keep. Empty string keeps all of them. |
+| `dbt_databricks_version` | `1.12.4` | Adapter installed into the job's serverless environment. Keep in step with `pyproject.toml`. |
 
 **Read `plan` output before applying.** Lines starting with `-` or
 `-/+` mean destroy. On a schema, that takes its tables with it.
