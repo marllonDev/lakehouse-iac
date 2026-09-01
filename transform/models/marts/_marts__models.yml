@@ -59,7 +59,7 @@ models:
       than a claim in a README.
     columns:
       - name: edit_key
-        description: Surrogate key over (wiki_code, event_id).
+        description: The event's Wikimedia UUID (meta.id). Globally unique.
         data_tests: [unique, not_null]
       - name: wiki_code
         data_tests: [not_null]

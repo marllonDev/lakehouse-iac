@@ -18,7 +18,11 @@
 #}
 
 select
-    cast(id as bigint)                            as event_id,
+    -- meta.id is the event's UUID and is unique across every wiki. The
+    -- top-level id is the recent-change id, which is null on most log events,
+    -- so it cannot carry a key.
+    meta.id                                       as event_uuid,
+    cast(id as bigint)                            as recent_change_id,
     meta.dt                                       as event_at,
     cast(timestamp as timestamp)                  as edited_at,
 

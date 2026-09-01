@@ -26,11 +26,13 @@ with edits as (
 final as (
 
     select
-        -- Wikimedia's event id is only unique within a wiki, so the key has to
-        -- carry the wiki as well.
-        {{ dbt_utils.generate_surrogate_key(['wiki_code', 'event_id']) }} as edit_key,
+        -- meta.id is already a globally unique UUID, so it is the key as-is.
+        -- An earlier version built a surrogate over (wiki, recent_change_id);
+        -- that collided, because generate_surrogate_key maps the null
+        -- recent_change_id of log events to one shared placeholder.
+        event_uuid as edit_key,
 
-        event_id,
+        recent_change_id,
         wiki_code,
         wiki_domain,
         change_type,

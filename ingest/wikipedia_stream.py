@@ -24,6 +24,7 @@ Parameters are read as Databricks widgets so the job can set them.
 """
 
 import json
+import os
 import time
 import urllib.request
 import uuid
@@ -70,6 +71,11 @@ def flush(buffer, volume_path):
 
 
 def consume(volume_path, batch_seconds, max_seconds, wikis):
+    # Terraform creates the volume, but not the directories inside it. Writing
+    # to a path whose parent does not exist fails with FileNotFoundError rather
+    # than creating it, so make the target explicitly.
+    os.makedirs(volume_path, exist_ok=True)
+
     request = urllib.request.Request(STREAM_URL, headers={"User-Agent": USER_AGENT})
 
     buffer = []

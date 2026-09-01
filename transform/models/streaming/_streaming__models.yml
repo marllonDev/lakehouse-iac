@@ -8,8 +8,13 @@ models:
       This is a streaming table: each refresh consumes only files that arrived
       since the previous one.
     columns:
-      - name: event_id
-        description: Wikimedia's own event id. Not unique across wikis.
+      - name: event_uuid
+        description: Wikimedia's event UUID. Unique across every wiki and event type.
+        data_tests: [unique, not_null]
+      - name: recent_change_id
+        description: >
+          The recent-change id. Null on most log events, so it is carried for
+          reference but never used as a key.
       - name: edited_at
         data_tests: [not_null]
       - name: wiki_code
