@@ -59,14 +59,10 @@ resource "databricks_job" "wikipedia" {
   # Two environments rather than one. The ingestion task needs nothing beyond
   # the standard library, and making it wait for dbt and its dependency tree to
   # install would delay the moment the stream connection opens.
-  environment {
-    environment_key = "ingest"
-
-    spec {
-      client = "3"
-    }
-  }
-
+  # Databricks' API always returns a job's environments sorted alphabetically
+  # by key, regardless of declaration order. Declaring them in that same order
+  # here (dbt, then ingest) keeps `terraform plan` at zero diff between applies
+  # instead of proposing to swap their positions every time.
   environment {
     environment_key = "dbt"
 
@@ -77,6 +73,14 @@ resource "databricks_job" "wikipedia" {
       # "dbt: command not found". Pinned to match pyproject.toml so a run on
       # Databricks resolves the same version as a run on a laptop.
       dependencies = ["dbt-databricks==${var.dbt_databricks_version}"]
+    }
+  }
+
+  environment {
+    environment_key = "ingest"
+
+    spec {
+      client = "3"
     }
   }
 
