@@ -33,10 +33,22 @@ jobs:
       - name: install dbt
         run: uv sync --frozen
 
+      # dbt parse fails immediately without this: packages.yml declares
+      # dbt_utils, dbt_packages/ is gitignored, and a fresh checkout has
+      # neither. This step doesn't touch Databricks — it only downloads
+      # packages from the dbt package registry.
+      - name: dbt deps
+        env:
+          DBT_PROFILES_DIR: transform
+        run: uv run dbt deps --project-dir transform
+
       - name: dbt parse
         env:
           DATABRICKS_HOST: https://example.cloud.databricks.com
           DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/placeholder
           DBT_PROFILES_DIR: transform
           DBT_CATALOG: dev_lakehouse
+        # auth_type: oauth resolves no credential until a real connection
+        # opens, and dbt parse never opens one, so the placeholder host above
+        # is never actually contacted.
         run: uv run dbt parse --no-partial-parse --project-dir transform
