@@ -54,15 +54,22 @@ stream.wikimedia.org  ──▶  raw.landing  ──▶  staging  ──▶  mar
                         JSON files)     streaming table)  agg_wikipedia_activity
 ```
 
-A Databricks job runs both halves: a task holds the firehose connection open
-and writes files, a second task runs `dbt build`. Both the job and everything
-upstream of it are provisioned by Terraform; the job clones this repository at
-run time, so the code that runs in production and the code in this repository
-are never able to drift apart. Measured end to end against the live workspace,
-an edit on Wikipedia becomes a queryable row in as little as 144 seconds.
-`fct_wikipedia_edits` carries its own pipeline latency as a column
-(`ingestion_lag_seconds`), so that number is something you can query, not a
-claim in this README.
+Two independent Databricks jobs, not one: an always-on job holds the firehose
+connection open and writes files forever, and a separately scheduled job
+rebuilds the models every 5 minutes. They used to be one job with the second
+task gated behind the first — which meant an always-on ingest task could never
+hand off, since it never finishes. Splitting them removed that coupling. Both
+jobs and everything upstream of them are provisioned by Terraform; each clones
+this repository at run time, so the code running in production and the code in
+this repository are never able to drift apart.
+
+Measured against the live workspace after the split: median latency from edit
+to queryable row is **124 seconds**, p90 is 250 seconds, and the worst case
+observed is 313 seconds — down from a 322-second median and a 1,758-second p99
+under the coupled design, whose long tail came from ingestion sitting
+completely idle between scheduled windows. `fct_wikipedia_edits` carries its
+own pipeline latency as a column (`ingestion_lag_seconds`), so these are
+numbers you can query yourself, not a claim in this README.
 
 ## Running it
 
@@ -80,15 +87,21 @@ terraform -chdir=infra apply -var environment=dev
 cd transform && dbt deps && dbt build
 ```
 
-That builds the batch path. The streaming job runs on its own schedule once
-`apply` has created it; to see it run immediately rather than wait:
+That builds the batch path. The two streaming jobs start on their own once
+`apply` has created them — ingestion immediately, the transform job on its next
+5-minute tick; to see the transform job run right away rather than wait:
 
 ```bash
-databricks jobs run-now --job-id "$(terraform -chdir=infra output -raw wikipedia_job_id)"
+databricks jobs run-now --job-id "$(terraform -chdir=infra output -raw wikipedia_transform_job_id)"
 ```
 
-It clones this repository over `git_source`, so it needs a Git credential
-linked in Databricks the first time — see [USAGE.md](USAGE.md#the-job-and-why-it-needs-github).
+Both jobs clone this repository over `git_source`, so Databricks needs a Git
+credential linked the first time — see [USAGE.md](USAGE.md#the-job-and-why-it-needs-github).
+To stop the ingestion job from running between demos without deleting it:
+
+```bash
+terraform -chdir=infra apply -var environment=dev -var ingest_pause_status=PAUSED
+```
 
 `scripts/bootstrap.sh` additionally installs the Databricks agent skills and MCP
 server used while developing this repo with an AI assistant. It is optional.

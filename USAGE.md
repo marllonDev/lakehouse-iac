@@ -88,27 +88,38 @@ Almost everything is a variable. To change behaviour, edit the `default` in
 | `databricks_profile` | `FREE` | Which CLI profile the catalog bootstrap authenticates with. |
 | `git_repo_url` | this repo | Where the job clones the dbt project from at run time. |
 | `git_branch` | `main` | Which branch the job runs. |
-| `streaming_mode` | `triggered` | `triggered` = scheduled runs. `continuous` = never exits, true real time. |
-| `ingest_schedule_cron` | every 15 min | Quartz cron, used only in `triggered` mode. Must exceed a full run. |
-| `ingest_window_seconds` | `300` | How long one triggered run consumes the firehose. Keep well below the schedule interval. |
-| `ingest_batch_seconds` | `60` | How often ingestion flushes a landing file. |
+| `ingest_pause_status` | `UNPAUSED` | `UNPAUSED` keeps the firehose connection open permanently. `PAUSED` stops it without destroying the job. |
+| `ingest_batch_seconds` | `60` | How often ingestion flushes a landing file. The floor on end-to-end latency. |
+| `dbt_schedule_cron` | every 5 min | Quartz cron for the transform job. Must exceed a full run — see below. |
 | `wikis` | `enwiki,ptwiki` | Which wikis to keep. Empty string keeps all of them. |
 | `dbt_databricks_version` | `1.12.4` | Adapter installed into the job's serverless environment. Keep in step with `pyproject.toml`. |
 
 **Read `plan` output before applying.** Lines starting with `-` or
 `-/+` mean destroy. On a schema, that takes its tables with it.
 
-### Switching to true real time
+### Ingestion and transformation are two independent jobs
+
+An earlier version chained them as two tasks in one job, the second gated
+behind the first with `depends_on`. That is a real trap worth naming: an
+always-on ingest task never finishes, so a task waiting on it never starts —
+the dbt build would never have run at all. They are separate jobs now, with no
+dependency between them. Ingestion holds the connection open indefinitely;
+the transform job runs on its own schedule and picks up whatever Auto Loader
+finds waiting, regardless of what ingestion is doing at that moment.
+
+`dbt_schedule_cron`'s interval must clear one full run, or the overlapping
+trigger is dropped with `MAX_CONCURRENT_RUNS_EXCEEDED` rather than queued —
+this happened on the very first tuning pass here: a 3-minute default died on
+its second trigger because the run (cold environment, first execution) took
+254.7 seconds. Warm runs measured afterward took 106–115 seconds. Five minutes
+clears both with margin.
+
+To stop consuming Free Edition's serverless allowance between demos without
+losing anything already built:
 
 ```bash
-terraform -chdir=infra apply -var environment=dev -var streaming_mode=continuous
+terraform -chdir=infra apply -var environment=dev -var ingest_pause_status=PAUSED
 ```
-
-The job stops being scheduled and instead holds the SSE connection open
-permanently, restarting the task if it drops. Latency goes from minutes to
-seconds. Compute then runs 24/7, which on Free Edition consumes the account's
-limited serverless allowance quickly. Switch back with
-`-var streaming_mode=triggered`.
 
 ---
 
@@ -358,6 +369,6 @@ databricks jobs run-now --job-id "$(terraform -chdir=infra output -raw wikipedia
 | Job fails `REPOSITORY_CHECKOUT_FAILED` / `PERMISSION_DENIED` | Account linked, but the Databricks GitHub App is not installed on the repository | Install at github.com/apps/databricks/installations/new; if scoped to selected repositories, add this one |
 | Job task fails `dbt: command not found` | Serverless environments start empty | Declare the adapter in the environment's `dependencies` — `dbt_databricks_version` handles this |
 | dbt fails `UC_HIVE_METASTORE_DISABLED_EXCEPTION` | A dbt task generates its own profile and ignores `profiles.yml`; with no catalog it falls back to the legacy metastore | Set `catalog` and `schema` on the `dbt_task` block |
-| Runs silently missing, `MAX_CONCURRENT_RUNS_EXCEEDED` | The schedule fires faster than a run completes; with concurrency capped at one the trigger is dropped, not queued | Widen `ingest_schedule_cron` or shorten `ingest_window_seconds` |
+| Runs silently missing, `MAX_CONCURRENT_RUNS_EXCEEDED` | The transform schedule fires faster than a run completes; with concurrency capped at one the trigger is dropped, not queued | Widen `dbt_schedule_cron` |
 | Streaming table returns zero rows | No files have landed yet | Run the ingest task first, then `dbt build -s st_wikipedia_edits+` |
 | dbt model exists but is empty after a code change | Incremental model kept its old rows | `dbt build -s <model> --full-refresh` |

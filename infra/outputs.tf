@@ -23,17 +23,22 @@ output "wikipedia_landing_path" {
   value       = local.wikipedia_path
 }
 
-output "wikipedia_job_id" {
-  description = "Job that ingests the Wikimedia firehose and rebuilds the dbt models on top of it."
-  value       = databricks_job.wikipedia.id
+output "wikipedia_ingest_job_id" {
+  description = "Always-on job that holds the Wikimedia firehose connection and lands files."
+  value       = databricks_job.wikipedia_ingest.id
 }
 
-output "wikipedia_job_url" {
-  description = "Direct link to the job in the Databricks UI."
-  value       = databricks_job.wikipedia.url
+output "wikipedia_ingest_job_url" {
+  description = "Direct link to the ingestion job in the Databricks UI."
+  value       = databricks_job.wikipedia_ingest.url
 }
 
-output "streaming_mode" {
-  description = "Whether ingestion runs on a schedule or holds the stream open continuously."
-  value       = var.streaming_mode
+output "wikipedia_transform_job_id" {
+  description = "Scheduled job that rebuilds the Wikimedia streaming models."
+  value       = databricks_job.wikipedia_transform.id
+}
+
+output "wikipedia_transform_job_url" {
+  description = "Direct link to the transform job in the Databricks UI."
+  value       = databricks_job.wikipedia_transform.url
 }

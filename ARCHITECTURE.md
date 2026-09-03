@@ -22,31 +22,34 @@ flowchart LR
         staging[("schema: staging<br/>5 views + 1 streaming table")]
         marts[("schema: marts<br/>5 tables")]
         wh["SQL Warehouse<br/>Serverless Starter<br/>(looked up, not created)"]
-        job["Job: dev-lakehouse-wikipedia<br/>every 15 min"]
+        ingestjob["Job: wikipedia-ingest<br/>continuous"]
+        transformjob["Job: wikipedia-transform<br/>every 5 min"]
     end
 
     tpch["samples.tpch<br/>(built into the workspace)"]
     wiki["stream.wikimedia.org<br/>recentchange firehose"]
 
     repo --> human
-    human ==>|"creates catalog, schemas,<br/>grants, volume, job"| dbx
-    job -.->|"clones at run time"| repo
+    human ==>|"creates catalog, schemas,<br/>grants, volume, both jobs"| dbx
+    ingestjob -.->|"clones at run time"| repo
+    transformjob -.->|"clones at run time"| repo
 
-    wiki --> job
-    job --> raw
+    wiki --> ingestjob
+    ingestjob --> raw
     tpch --> staging
     raw -->|"Auto Loader, incremental"| staging
     staging -->|"merge, incremental"| marts
-    wh --- job
+    wh --- transformjob
 ```
 
-Two data paths share one platform:
+No dependency runs between the two jobs — that is the point of splitting them,
+covered in §7. Two data paths share one platform:
 
 | | Batch | Streaming |
 |---|---|---|
 | Source | `samples.tpch` (already in the workspace) | Wikimedia EventStreams (public internet) |
-| Entry point | dbt reads it directly | A Python task lands it as files first |
-| Trigger | Manual (`dbt build`) | Job schedule, every 15 minutes |
+| Entry point | dbt reads it directly | A Python job lands it as files first |
+| Trigger | Manual (`dbt build`) | Ingestion: continuous. Transform: every 5 minutes. |
 | Landing | — (queried in place) | Volume `dev_lakehouse.raw.landing` |
 
 ---
@@ -64,7 +67,7 @@ This is the one rule the whole project is built around:
 | Schemas `raw`, `staging`, `marts` | Terraform | `databricks_schema` resource |
 | Grants | Terraform | `databricks_grants` resource |
 | Volume `raw.landing` | Terraform | `databricks_volume` resource |
-| Job `dev-lakehouse-wikipedia` | Terraform | `databricks_job` resource, in [infra/streaming.tf](infra/streaming.tf) |
+| Jobs `dev-lakehouse-wikipedia-ingest` and `-transform` | Terraform | Two `databricks_job` resources, no dependency between them, in [infra/streaming.tf](infra/streaming.tf) |
 | Views, streaming table, mart tables | dbt | `dbt build`, run either locally or by the job's `transform` task |
 | The Lakeflow pipeline behind the streaming table | **Databricks, implicitly** | Created the moment `CREATE STREAMING TABLE ... read_files(...)` executes. Neither Terraform nor dbt ever names it. |
 | Directories inside the volume | **The ingestion script** | `os.makedirs()` — the volume resource creates the volume, not its subfolders |
@@ -174,42 +177,47 @@ Both are documented in code comments at the point they matter, not only here.
 
 ---
 
-## 6. What happens on one job run
+## 6. What happens across the two jobs
+
+These are two separate `databricks_job` resources with no dependency between
+them — not two tasks in one job. That distinction is the subject of §7's first
+decision below; the short version is that an earlier single-job version could
+never actually run dbt once ingestion became always-on, because the task
+graph made the build wait for ingestion to finish, and an always-on task never
+finishes.
 
 ```mermaid
 sequenceDiagram
-    participant S as Scheduler
-    participant J as Job: dev-lakehouse-wikipedia
     participant G as GitHub (git_source)
-    participant I as Task: ingest
+    participant I as Job: wikipedia-ingest
     participant W as Wikimedia firehose
     participant V as Volume raw.landing
-    participant T as Task: transform
+    participant S as Scheduler
+    participant T as Job: wikipedia-transform
     participant D as dbt (in job env)
     participant U as Unity Catalog
 
-    S->>J: cron fires (every 15 min)
-    J->>G: clone main branch
-    G-->>J: checkout
-    J->>I: run ingest/wikipedia_stream.py
+    Note over I: continuous — restarts itself if it ever exits
+    I->>G: clone main branch
     I->>W: open SSE connection
-    loop every batch_seconds, until ingest_window_seconds
+    loop every batch_seconds, forever
         W-->>I: recentchange events
         I->>V: flush one immutable JSON file
     end
-    I-->>J: files=N events=M
-    J->>T: run (depends_on ingest)
+
+    Note over T: independent schedule — every 5 minutes
+    S->>T: cron fires
+    T->>G: clone main branch
     T->>D: dbt deps && dbt build --select st_wikipedia_edits+
-    D->>V: Auto Loader reads new files only
+    D->>V: Auto Loader reads whatever files are new
     D->>U: MERGE into fct_wikipedia_edits, rebuild agg_wikipedia_activity
     D-->>T: PASS=15 ERROR=0
-    T-->>J: SUCCESS
 ```
 
-Two tasks, not one, because they fail differently: `ingest` holds a network
-connection open and writes files; `transform` is a batch SQL run against a
-warehouse. Splitting them means a dbt failure never loses events already
-landed — they simply wait in the volume for the next successful `transform`.
+Splitting them this way also means a dbt failure never loses events already
+landed — they simply wait in the volume for the next successful transform run,
+whenever that is, since Auto Loader's checkpoint doesn't care how long a file
+has been sitting there.
 
 ---
 
@@ -221,13 +229,13 @@ Short-form ADRs — the choice, and the alternative it beat.
 |---|---|---|
 | Catalog creation | SQL statement via `local-exec` | The native `databricks_catalog` resource — fails outright on Free Edition |
 | Warehouse | `data` source (lookup) | `resource` (create) — Free Edition allows exactly one, already provisioned |
-| Ingestion vs. transform | Two job tasks | One task doing both — a dbt failure would strand the ingested events with no boundary |
+| Ingestion vs. transform | **Two separate jobs**, no dependency between them | Two tasks in one job with `depends_on` — the first working version. It ran fine in scheduled/windowed mode, but the whole point of making ingestion always-on is that it never exits, and a task gated on a task that never exits never starts. That version could not have run dbt at all once ingestion stopped being windowed. |
 | Wikipedia event key | `meta.id` (UUID) | Surrogate key over `(wiki, recent_change_id)` — collided, because `recent_change_id` is null on most `log` events and the surrogate hash maps every null to the same value |
 | Job environments | Two (`ingest`, `dbt`) | One shared environment — would force the ingestion task to wait on dbt's dependency install before opening the stream connection |
 | dbt task catalog | Declared explicitly on `dbt_task` | Relying on `profiles.yml` — a `dbt_task` generates its own profile at run time and ignores the repository's, defaulting to the legacy Hive metastore |
-| Schedule interval | 15 minutes | 5 minutes — shorter than a full run, so triggers were silently dropped with `MAX_CONCURRENT_RUNS_EXCEEDED` instead of queued |
+| Transform schedule interval | 5 minutes | 3 minutes, tried first — died on its second trigger with `MAX_CONCURRENT_RUNS_EXCEEDED`. A cold run (fresh environment, first execution) measured 254.7 seconds; two warm runs after that measured 106–115 seconds. Five minutes clears both. |
 | Job/pipeline IaC | Terraform, alongside catalog governance | A Databricks Asset Bundle — would split one platform across two state files for no capability this project needs (see §4) |
-| Real-time mode | `streaming_mode` variable, default `triggered` | Continuous by default — holds compute 24/7, which is expensive against an unmetered Free Edition allowance for a default nobody asked to run permanently |
+| Ingestion cadence | Always-on (`continuous`), pausable via `ingest_pause_status` | A triggered/continuous toggle spanning the whole pipeline — the toggle used to exist, but "continuous" under the old single-job design silently never built anything (see the first row above). Splitting the jobs made the toggle meaningless: ingestion just always runs continuously now, cheaply, since it holds an idle socket rather than warehouse compute; only the transform job's schedule is a cost/latency knob. |
 
 ---
 
@@ -261,10 +269,11 @@ Everything below exists in the live workspace as of the last verified run.
 | Schemas | `raw`, `staging`, `marts` |
 | Volume | `dev_lakehouse.raw.landing` |
 | Warehouse (looked up, not owned) | `Serverless Starter Warehouse` |
-| Job | `dev-lakehouse-wikipedia`, schedule `0 0/15 * * * ?` |
+| Ingest job | `dev-lakehouse-wikipedia-ingest`, continuous |
+| Transform job | `dev-lakehouse-wikipedia-transform`, schedule `0 0/5 * * * ?` |
 | Batch models | 5 staging views, `dim_customers`, `fct_orders`, `agg_sales_by_month` |
 | Streaming models | `st_wikipedia_edits` (streaming table), `fct_wikipedia_edits`, `agg_wikipedia_activity` |
-| Last verified end-to-end run | `ingest`: 5 files / 1,981 events · `transform`: PASS=15 ERROR=0 |
-| Measured minimum latency | 144 seconds, edit to queryable row |
+| Last verified transform run | PASS=15 ERROR=0, 106.5s (warm) |
+| Measured latency, edit to queryable row | p50 124s · p90 250s · max 313s |
 
 See [SPEC.md](SPEC.md) §9 for the full breakdown with row counts.

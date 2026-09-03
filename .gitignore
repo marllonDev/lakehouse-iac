@@ -31,3 +31,6 @@ crash.log
 
 # macOS
 .DS_Store
+
+# Personal, not part of the project
+linkedin-post.md

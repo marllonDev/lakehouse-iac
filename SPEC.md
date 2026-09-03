@@ -365,7 +365,9 @@ managed by the Databricks CLI. `terraform.tfvars` and `.env` are gitignored;
 Provisioned and verified against the live workspace.
 
 **Terraform** — catalog `dev_lakehouse`; schemas `raw`, `staging`, `marts`;
-grants; the `landing` volume; and the `dev-lakehouse-wikipedia` job.
+grants; the `landing` volume; and two jobs, `dev-lakehouse-wikipedia-ingest`
+(continuous) and `dev-lakehouse-wikipedia-transform` (every 5 minutes), with
+no dependency between them.
 
 **Batch path** — `dbt build` passes 40/40.
 
@@ -375,25 +377,30 @@ grants; the `landing` volume; and the `dev-lakehouse-wikipedia` job.
 | `fct_orders` | 7,500,000 |
 | `agg_sales_by_month` | 2,000 |
 
-**Streaming path** — the job runs end to end on Databricks: it clones this
-repository, consumes the firehose, and rebuilds the models. Last verified run
-landed 5 files and 1,981 events, then passed 15/15 tests.
+**Streaming path** — both jobs run end to end on Databricks, independently:
+ingestion clones this repository once and holds the firehose connection open
+indefinitely; transform clones it fresh on every scheduled run and rebuilds
+the models. Verified transform run durations: 254.7 seconds cold (first
+execution, environment not yet warm), 106.5–115.0 seconds warm — five minutes
+between triggers clears both.
 
 | Model | Rows |
 |---|---|
-| `st_wikipedia_edits` | grows with each run |
-| `fct_wikipedia_edits` | 7,495 across 27 minutes of stream |
-| `agg_wikipedia_activity` | 50 |
+| `st_wikipedia_edits` | grows continuously |
+| `fct_wikipedia_edits` | grows continuously, merged every transform run |
+| `agg_wikipedia_activity` | grows continuously |
 
-Observed steady-state latency, edit to queryable row, is roughly 150 seconds:
-the ingestion flush interval plus the dbt build. Averages over the whole table
-are much higher, because files landed by earlier failed runs sat unread until
-one later run consumed them all at once — which is itself the point of an Auto
-Loader streaming table, and visible in the data rather than hidden.
+Latency, edit to queryable row, measured against live traffic after the split:
+p50 124 seconds, p90 250 seconds, max observed 313 seconds. An earlier,
+coupled design — one job, ingestion as a task the transform task waited on —
+measured p50 322 seconds and p99 1,758 seconds; its long tail came from
+ingestion sitting completely idle for most of each 15-minute schedule
+interval, a dead zone the always-on design has no equivalent of.
 
 ## 10. Not built yet
 
 - A `prod` environment, to demonstrate dev → prod promotion
 - A remote Terraform state backend — state is currently local
-- Continuous mode has never been run for a sustained period, so its real cost
-  against the Free Edition allowance is still an estimate, not a measurement
+- Sustained cost of the now-permanent `wikipedia-ingest` job against Free
+  Edition's serverless allowance — pause with `ingest_pause_status = "PAUSED"`
+  if this becomes a concern

@@ -61,58 +61,50 @@ variable "git_branch" {
   default     = "main"
 }
 
-variable "streaming_mode" {
+variable "ingest_pause_status" {
   description = <<-EOT
-    How the Wikimedia ingestion job runs.
+    Controls whether the always-on ingestion job is running.
 
-    "triggered"  — the job runs on a schedule, each run consuming the firehose
-                   for `ingest_window_seconds` and then exiting. Latency is
-                   roughly one schedule interval; compute cost is bounded and
-                   predictable.
-
-    "continuous" — the job never exits and holds the stream open. True real
-                   time, at the cost of compute running 24/7. On Free Edition
-                   that will consume the account's limited serverless
-                   allowance quickly, so it is not the default.
+    "UNPAUSED" — the job holds the Wikimedia firehose connection open
+                 permanently, restarting automatically if the connection drops
+                 or the task crashes.
+    "PAUSED"   — the job exists but does not run. Use this to stop consuming
+                 Free Edition's serverless allowance between demos, without
+                 destroying the job or losing what has already landed.
   EOT
   type        = string
-  default     = "triggered"
+  default     = "UNPAUSED"
 
   validation {
-    condition     = contains(["triggered", "continuous"], var.streaming_mode)
-    error_message = "streaming_mode must be one of: triggered, continuous."
+    condition     = contains(["UNPAUSED", "PAUSED"], var.ingest_pause_status)
+    error_message = "ingest_pause_status must be one of: UNPAUSED, PAUSED."
   }
 }
 
-variable "ingest_schedule_cron" {
-  description = <<-EOT
-    Quartz cron for the ingestion job in triggered mode.
-
-    The interval must exceed a full run: ingest_window_seconds, plus serverless
-    startup, plus the dbt build. Measured against this workspace, a 300-second
-    window completes in roughly eight minutes end to end, so the default leaves
-    a wide margin. Set it too short and runs overlap; because the job caps
-    concurrency at one, the overlapping run is dropped with
-    MAX_CONCURRENT_RUNS_EXCEEDED rather than queued, and the gap goes unnoticed.
-  EOT
-  type        = string
-  default     = "0 0/15 * * * ?"
-}
-
-variable "ingest_window_seconds" {
-  description = <<-EOT
-    How long a triggered run consumes the firehose before exiting. Should be
-    comfortably shorter than the schedule interval so runs never overlap.
-    Ignored in continuous mode, where the task is told to run forever.
-  EOT
-  type        = number
-  default     = 300
-}
-
 variable "ingest_batch_seconds" {
-  description = "How often the ingestion task flushes a landing file."
+  description = "How often the ingestion task flushes a landing file. This is the floor on end-to-end latency: an edit cannot become a row before its batch is flushed."
   type        = number
   default     = 60
+}
+
+variable "dbt_schedule_cron" {
+  description = <<-EOT
+    Quartz cron for the transform job, which rebuilds the streaming models on
+    a fixed schedule independent of ingestion. Auto Loader tracks which files
+    it has already read, so running this on any cadence is safe — it always
+    picks up whatever has landed since the last run.
+
+    The interval must exceed one run's duration or overlapping triggers are
+    dropped with MAX_CONCURRENT_RUNS_EXCEEDED rather than queued — measured
+    directly: a three-minute default did exactly this on its second trigger.
+    Two real runs against this workspace: 114.97s once the job's environment
+    was warm, 254.70s on the very first run against a cold one (fresh
+    dependency install, cold git checkout). Five minutes clears both with
+    margin; narrower is possible but should be re-validated against a few
+    more real runs first, not assumed.
+  EOT
+  type        = string
+  default     = "0 0/5 * * * ?"
 }
 
 variable "wikis" {

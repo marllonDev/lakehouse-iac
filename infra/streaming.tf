@@ -1,11 +1,6 @@
 locals {
   landing_volume_path = "/Volumes/${local.catalog_name}/raw/landing"
   wikipedia_path      = "${local.landing_volume_path}/wikipedia"
-
-  # In continuous mode the ingestion task must never exit on its own — the job
-  # itself owns the lifecycle and restarts the task if it dies. max_seconds=0
-  # is the script's signal for "run forever".
-  ingest_max_seconds = var.streaming_mode == "continuous" ? 0 : var.ingest_window_seconds
 }
 
 # The landing zone. Files written here are immutable; the downstream streaming
@@ -20,13 +15,17 @@ resource "databricks_volume" "landing" {
   depends_on = [databricks_schema.this]
 }
 
-# Ingest, then transform. Two tasks rather than one because they have genuinely
-# different shapes: the first holds a network connection open and writes files,
-# the second is a batch SQL run against a warehouse. Splitting them means a dbt
-# failure does not lose the events already landed.
-resource "databricks_job" "wikipedia" {
-  name        = "${var.environment}-${var.project}-wikipedia"
-  description = "Consumes the Wikimedia EventStreams firehose, then rebuilds the dbt models on top of it."
+# Ingestion and transformation are two independent jobs, not two tasks in one
+# job. An earlier version chained them with depends_on so transform only ran
+# after ingest finished — which meant an always-on ingest task (needed for low
+# latency) could never hand off, because it never finishes. Splitting them
+# removes that coupling entirely: ingest just holds the connection open and
+# writes files, forever; transform runs on its own short cycle and picks up
+# whatever exists via Auto Loader's file-level checkpoint, regardless of what
+# ingest is doing at that moment.
+resource "databricks_job" "wikipedia_ingest" {
+  name        = "${var.environment}-${var.project}-wikipedia-ingest"
+  description = "Holds the Wikimedia EventStreams connection open and lands events as files. Runs continuously; pause with ingest_pause_status."
 
   git_source {
     url      = var.git_repo_url
@@ -34,46 +33,8 @@ resource "databricks_job" "wikipedia" {
     branch   = var.git_branch
   }
 
-  # Only one of these blocks is ever active. In continuous mode the job restarts
-  # the task as soon as it exits, so a dropped SSE connection self-heals.
-  dynamic "schedule" {
-    for_each = var.streaming_mode == "triggered" ? [1] : []
-
-    content {
-      quartz_cron_expression = var.ingest_schedule_cron
-      timezone_id            = "UTC"
-    }
-  }
-
-  dynamic "continuous" {
-    for_each = var.streaming_mode == "continuous" ? [1] : []
-
-    content {
-      pause_status = "UNPAUSED"
-    }
-  }
-
-  # Overlapping runs would land duplicate files and race the dbt build.
-  max_concurrent_runs = 1
-
-  # Two environments rather than one. The ingestion task needs nothing beyond
-  # the standard library, and making it wait for dbt and its dependency tree to
-  # install would delay the moment the stream connection opens.
-  # Databricks' API always returns a job's environments sorted alphabetically
-  # by key, regardless of declaration order. Declaring them in that same order
-  # here (dbt, then ingest) keeps `terraform plan` at zero diff between applies
-  # instead of proposing to swap their positions every time.
-  environment {
-    environment_key = "dbt"
-
-    spec {
-      client = "3"
-
-      # Serverless job compute starts empty: without this the task fails with
-      # "dbt: command not found". Pinned to match pyproject.toml so a run on
-      # Databricks resolves the same version as a run on a laptop.
-      dependencies = ["dbt-databricks==${var.dbt_databricks_version}"]
-    }
+  continuous {
+    pause_status = var.ingest_pause_status
   }
 
   environment {
@@ -95,9 +56,48 @@ resource "databricks_job" "wikipedia" {
       base_parameters = {
         volume_path   = local.wikipedia_path
         batch_seconds = tostring(var.ingest_batch_seconds)
-        max_seconds   = tostring(local.ingest_max_seconds)
-        wikis         = var.wikis
+        # 0 tells the script to never exit. There is no windowed variant any
+        # more: an ingestion job that stops on its own is exactly the coupling
+        # this split was written to remove.
+        max_seconds = "0"
+        wikis       = var.wikis
       }
+    }
+  }
+
+  depends_on = [databricks_volume.landing]
+}
+
+resource "databricks_job" "wikipedia_transform" {
+  name        = "${var.environment}-${var.project}-wikipedia-transform"
+  description = "Rebuilds the Wikimedia streaming models. Scheduled independently of ingestion."
+
+  git_source {
+    url      = var.git_repo_url
+    provider = "gitHub"
+    branch   = var.git_branch
+  }
+
+  schedule {
+    quartz_cron_expression = var.dbt_schedule_cron
+    timezone_id            = "UTC"
+  }
+
+  # A run that overlaps the previous one would race the same MERGE; dropping
+  # it is correct here; MAX_CONCURRENT_RUNS_EXCEEDED in the run history is the
+  # signal that dbt_schedule_cron needs to be widened.
+  max_concurrent_runs = 1
+
+  environment {
+    environment_key = "dbt"
+
+    spec {
+      client = "3"
+
+      # Serverless job compute starts empty: without this the task fails with
+      # "dbt: command not found". Pinned to match pyproject.toml so a run on
+      # Databricks resolves the same version as a run on a laptop.
+      dependencies = ["dbt-databricks==${var.dbt_databricks_version}"]
     }
   }
 
@@ -105,13 +105,10 @@ resource "databricks_job" "wikipedia" {
     task_key        = "transform"
     environment_key = "dbt"
 
-    depends_on {
-      task_key = "ingest"
-    }
-
     dbt_task {
-      project_directory = "transform"
-      warehouse_id      = data.databricks_sql_warehouse.this.id
+      project_directory  = "transform"
+      profiles_directory = "transform"
+      warehouse_id       = data.databricks_sql_warehouse.this.id
 
       # A dbt task generates its own profile and ignores the one in the repo,
       # so the catalog has to be declared here. Without it dbt falls back to the
@@ -127,5 +124,5 @@ resource "databricks_job" "wikipedia" {
     }
   }
 
-  depends_on = [databricks_volume.landing]
+  depends_on = [databricks_schema.this]
 }
