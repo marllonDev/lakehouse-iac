@@ -81,6 +81,10 @@ resource "databricks_job" "wikipedia_transform" {
   schedule {
     quartz_cron_expression = var.dbt_schedule_cron
     timezone_id            = "UTC"
+    # Pausing ingestion with no equivalent here would leave this firing every
+    # few minutes to rebuild a streaming table that never receives new files —
+    # short, but not free. The two are meant to be paused together.
+    pause_status = var.ingest_pause_status
   }
 
   # A run that overlaps the previous one would race the same MERGE; dropping

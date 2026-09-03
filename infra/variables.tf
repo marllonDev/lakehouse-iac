@@ -63,14 +63,17 @@ variable "git_branch" {
 
 variable "ingest_pause_status" {
   description = <<-EOT
-    Controls whether the always-on ingestion job is running.
+    Controls whether both streaming jobs are running. Applied to both
+    wikipedia-ingest and wikipedia-transform together: pausing one without the
+    other leaves the transform job firing every few minutes to rebuild a
+    streaming table that never receives a new file.
 
-    "UNPAUSED" — the job holds the Wikimedia firehose connection open
-                 permanently, restarting automatically if the connection drops
-                 or the task crashes.
-    "PAUSED"   — the job exists but does not run. Use this to stop consuming
+    "UNPAUSED" — ingestion holds the Wikimedia firehose connection open
+                 permanently, restarting automatically if it drops; transform
+                 runs on its schedule.
+    "PAUSED"   — both jobs exist but do not run. Use this to stop consuming
                  Free Edition's serverless allowance between demos, without
-                 destroying the job or losing what has already landed.
+                 destroying anything or losing what has already landed.
   EOT
   type        = string
   default     = "UNPAUSED"
