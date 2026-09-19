@@ -1,6 +1,3 @@
-# Vendored tooling (rebuild with: bash tools/ai-dev-kit/databricks-mcp-server/setup.sh)
-tools/ai-dev-kit/
-
 # Python
 .venv/
 __pycache__/

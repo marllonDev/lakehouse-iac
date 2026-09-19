@@ -13,7 +13,6 @@
 _root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 
 export PATH="$_root/.bin:$_root/.venv/bin:$PATH"
-export AI_DEV_KIT_HOME="$_root/tools/ai-dev-kit"
 
 export DATABRICKS_CONFIG_PROFILE="${DATABRICKS_CONFIG_PROFILE:-FREE}"
 

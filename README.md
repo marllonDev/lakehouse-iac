@@ -106,8 +106,6 @@ terraform -chdir=infra apply -var environment=dev -var ingest_pause_status=PAUSE
 Working on this repo with an AI assistant is optional and not part of the
 pipeline. Databricks agent skills are installed once per machine, not per
 repository: `databricks aitools install --agents claude-code --scope global`.
-`scripts/bootstrap.sh` additionally vendors the project-scoped Databricks MCP
-server.
 
 ## Free Edition constraints, and what they forced
 

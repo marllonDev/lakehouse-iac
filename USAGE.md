@@ -39,7 +39,6 @@ lakehouse-iac/
 ├── ingest/         Python       — brings data in from outside
 ├── scripts/        Bash         — installs tooling, sets up the shell
 ├── .github/        CI           — checks that runs on every push
-└── tools/          Vendored     — Databricks MCP server, not part of the pipeline
 ```
 
 Three of these are the pipeline: `ingest/` → `transform/` → and `infra/` holding
@@ -261,7 +260,6 @@ where the volume is.
 | `install-tools.sh` | Downloads terraform and the databricks CLI into `.bin/`, installs dbt into `.venv/`. Nothing system-wide. | Once, after cloning. |
 | `env.sh` | Puts `.bin` and `.venv/bin` on PATH; sets `DATABRICKS_HOST`, `DATABRICKS_HTTP_PATH`, `DBT_CATALOG`, `DBT_PROFILES_DIR`. | **Every new shell.** `source` it, do not execute it. |
 | `uc-catalog.sh` | Creates or drops the catalog over the SQL API. Called by Terraform, not by you. | Never directly. |
-| `bootstrap.sh` | Vendors the project-scoped Databricks MCP server into `tools/ai-dev-kit/`. | Optional. |
 
 Tool versions are pinned at the top of `install-tools.sh`. Change the variable,
 re-run the script, and the binary is replaced.
@@ -288,15 +286,10 @@ public repository should never hold credentials that can write to a warehouse.
 
 ---
 
-## `tools/` — not part of the pipeline
+## AI assistant tooling — not part of the pipeline
 
-`tools/ai-dev-kit/` holds the Databricks MCP server. It is gitignored and
-recreated by `scripts/bootstrap.sh`. It helps while developing this repository
-with an AI assistant and has no role at run time. Delete it and the pipeline
-still works.
-
-Databricks agent skills are not kept in this repository. They are installed
-once per machine as a plugin, outside the project:
+Nothing in this repository exists for an AI assistant. Databricks agent skills
+are installed once per machine as a plugin, outside the project:
 
 ```bash
 databricks aitools install --agents claude-code --scope global
@@ -314,7 +307,6 @@ All gitignored:
 | `.venv/` | dbt and its dependencies | Yes — `uv sync` recreates it |
 | `transform/target/` | Compiled SQL and run artifacts | Yes |
 | `transform/dbt_packages/` | Installed dbt packages | Yes — `dbt deps` recreates it |
-| `tools/ai-dev-kit/` | Vendored MCP server | Yes — `bootstrap.sh` recreates it |
 | `infra/.terraform/` | Downloaded providers | Yes — `terraform init` recreates it |
 | `infra/terraform.tfstate` | Record of what exists | **No.** Deleting it orphans real resources. |
 

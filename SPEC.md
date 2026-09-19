@@ -54,13 +54,10 @@ lakehouse-iac/
 ├── scripts/                  ← Operational glue.
 │   ├── install-tools.sh         downloads terraform + databricks CLI + dbt into the repo
 │   ├── env.sh                   puts them on PATH and sets connection env vars
-│   ├── uc-catalog.sh            creates/drops the catalog over SQL (see §7)
-│   ├── install-tools.sh         downloads the pinned CLIs into the repository
-│   └── bootstrap.sh             vendors the project-scoped MCP server (optional)
+│   └── uc-catalog.sh            creates/drops the catalog over SQL (see §7)
 │
 ├── .bin/                     ← terraform + databricks binaries      (gitignored)
 ├── .venv/                    ← dbt                                  (gitignored)
-└── tools/ai-dev-kit/         ← Databricks MCP server                (gitignored)
 ```
 
 ---
