@@ -52,3 +52,13 @@ output "tpch_batch_job_url" {
   description = "Direct link to the TPC-H batch job in the Databricks UI."
   value       = databricks_job.tpch_batch.url
 }
+
+output "dbt_v2_spike_job_id" {
+  description = "Manually triggered spike job that runs dbt v2 through a Python task."
+  value       = databricks_job.dbt_v2_spike.id
+}
+
+output "dbt_v2_spike_job_url" {
+  description = "Direct link to the dbt v2 spike job in the Databricks UI."
+  value       = databricks_job.dbt_v2_spike.url
+}

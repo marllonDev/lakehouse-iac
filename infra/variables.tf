@@ -125,3 +125,37 @@ variable "dbt_databricks_version" {
   type        = string
   default     = "1.12.4"
 }
+
+variable "dbt_v2_package" {
+  description = <<-EOT
+    PyPI distribution of dbt v2 installed into the spike job's environment.
+    "dbt" is the dbt Labs distribution (dbt license); "dbt-oss" is the Apache-2.0
+    subset. Both connected to a Databricks SQL warehouse and parsed this
+    project in the feasibility probe, so this is a licence choice, not a
+    capability one, until a build proves otherwise.
+  EOT
+  type        = string
+  default     = "dbt"
+
+  validation {
+    condition     = contains(["dbt", "dbt-oss"], var.dbt_v2_package)
+    error_message = "dbt_v2_package must be one of: dbt, dbt-oss."
+  }
+}
+
+variable "dbt_v2_version" {
+  description = <<-EOT
+    Exact version of dbt_v2_package. The two distributions do not share version
+    numbers: dbt was 2.0.6 and dbt-oss 2.0.5 when this spike started. Never a
+    range, because the package fetches binaries at install time and a range
+    would let two runs of the same commit execute different dbt builds.
+  EOT
+  type        = string
+  default     = "2.0.6"
+}
+
+variable "dbt_v2_git_branch" {
+  description = "Branch the dbt v2 spike job clones at run time. Not main: the spike code lives on a feature branch until it is proven."
+  type        = string
+  default     = "feat/dbt-v2-sail-spike"
+}
