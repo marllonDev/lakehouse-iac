@@ -74,7 +74,11 @@ def run(cmd, env, secret):
 def main():
     args = parse_args()
 
-    project_dir = Path(__file__).resolve().parents[1] / "transform"
+    # A Databricks spark_python_task runs the script through exec(compile(...)),
+    # which leaves __file__ undefined. The compiled code object still carries the
+    # real path of the file inside the Git checkout.
+    script = Path(main.__code__.co_filename).resolve()
+    project_dir = script.parents[1] / "transform"
     if not (project_dir / "dbt_project.yml").exists():
         sys.exit(f"no dbt project at {project_dir}; is this script running from a Git checkout?")
 
