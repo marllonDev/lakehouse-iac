@@ -39,7 +39,6 @@ lakehouse-iac/
 ├── ingest/         Python       — brings data in from outside
 ├── scripts/        Bash         — installs tooling, sets up the shell
 ├── .github/        CI           — checks that runs on every push
-├── .claude/        Agent config — skills, not part of the pipeline
 └── tools/          Vendored     — Databricks MCP server, not part of the pipeline
 ```
 
@@ -262,7 +261,7 @@ where the volume is.
 | `install-tools.sh` | Downloads terraform and the databricks CLI into `.bin/`, installs dbt into `.venv/`. Nothing system-wide. | Once, after cloning. |
 | `env.sh` | Puts `.bin` and `.venv/bin` on PATH; sets `DATABRICKS_HOST`, `DATABRICKS_HTTP_PATH`, `DBT_CATALOG`, `DBT_PROFILES_DIR`. | **Every new shell.** `source` it, do not execute it. |
 | `uc-catalog.sh` | Creates or drops the catalog over the SQL API. Called by Terraform, not by you. | Never directly. |
-| `bootstrap.sh` | Installs the Databricks agent skills and MCP server used for AI-assisted development. | Optional. |
+| `bootstrap.sh` | Vendors the project-scoped Databricks MCP server into `tools/ai-dev-kit/`. | Optional. |
 
 Tool versions are pinned at the top of `install-tools.sh`. Change the variable,
 re-run the script, and the binary is replaced.
@@ -289,12 +288,19 @@ public repository should never hold credentials that can write to a warehouse.
 
 ---
 
-## `.claude/` and `tools/` — not part of the pipeline
+## `tools/` — not part of the pipeline
 
-`.claude/skills/` holds Databricks agent skills, project-scoped. `tools/ai-dev-kit/`
-holds the Databricks MCP server. Both are gitignored and reinstalled by
-`scripts/bootstrap.sh`. They help while developing this repository with an AI
-assistant and have no role at run time. Delete them and the pipeline still works.
+`tools/ai-dev-kit/` holds the Databricks MCP server. It is gitignored and
+recreated by `scripts/bootstrap.sh`. It helps while developing this repository
+with an AI assistant and has no role at run time. Delete it and the pipeline
+still works.
+
+Databricks agent skills are not kept in this repository. They are installed
+once per machine as a plugin, outside the project:
+
+```bash
+databricks aitools install --agents claude-code --scope global
+```
 
 ---
 

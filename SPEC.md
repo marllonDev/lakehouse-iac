@@ -56,7 +56,7 @@ lakehouse-iac/
 │   ├── env.sh                   puts them on PATH and sets connection env vars
 │   ├── uc-catalog.sh            creates/drops the catalog over SQL (see §7)
 │   ├── install-tools.sh         downloads the pinned CLIs into the repository
-│   └── bootstrap.sh             installs the AI agent skills and MCP server (optional)
+│   └── bootstrap.sh             vendors the project-scoped MCP server (optional)
 │
 ├── .bin/                     ← terraform + databricks binaries      (gitignored)
 ├── .venv/                    ← dbt                                  (gitignored)

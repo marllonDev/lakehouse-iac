@@ -23,9 +23,6 @@ crash.log
 # Secrets
 .env
 
-# Vendored Databricks agent skills (reinstall with: bash scripts/bootstrap.sh)
-.claude/skills/
-
 # Project-local CLIs
 .bin/
 
