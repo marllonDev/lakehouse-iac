@@ -42,3 +42,13 @@ output "wikipedia_transform_job_url" {
   description = "Direct link to the transform job in the Databricks UI."
   value       = databricks_job.wikipedia_transform.url
 }
+
+output "tpch_batch_job_id" {
+  description = "Manually triggered job that builds the TPC-H batch models."
+  value       = databricks_job.tpch_batch.id
+}
+
+output "tpch_batch_job_url" {
+  description = "Direct link to the TPC-H batch job in the Databricks UI."
+  value       = databricks_job.tpch_batch.url
+}
