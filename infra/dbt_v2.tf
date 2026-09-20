@@ -19,7 +19,7 @@ resource "databricks_job" "dbt_v2_spike" {
   git_source {
     url      = var.git_repo_url
     provider = "gitHub"
-    branch   = var.dbt_v2_git_branch
+    branch   = var.git_branch
   }
 
   max_concurrent_runs = 1

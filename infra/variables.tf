@@ -53,9 +53,13 @@ variable "git_repo_url" {
 }
 
 variable "git_branch" {
-  description = "Branch the dbt job runs from."
+  description = <<-EOT
+    Branch both dbt jobs clone at run time. They share one variable on purpose:
+    comparing dbt Core with dbt v2 only means something if both run exactly the
+    same code. Currently the feature branch; set it back to main once merged.
+  EOT
   type        = string
-  default     = "main"
+  default     = "feat/dbt-v2-sail-spike"
 }
 
 variable "dbt_databricks_version" {
@@ -94,12 +98,6 @@ variable "dbt_v2_version" {
   EOT
   type        = string
   default     = "2.0.6"
-}
-
-variable "dbt_v2_git_branch" {
-  description = "Branch the dbt v2 spike job clones at run time. Not main: the spike code lives on a feature branch until it is proven."
-  type        = string
-  default     = "feat/dbt-v2-sail-spike"
 }
 
 variable "dbt_v2_environment_version" {

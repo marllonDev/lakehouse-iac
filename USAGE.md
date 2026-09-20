@@ -91,12 +91,11 @@ Almost everything is a variable. To change behaviour, edit the `default` in
 | `sql_warehouse_name` | `Serverless Starter Warehouse` | Which warehouse to look up and hand to dbt. |
 | `databricks_profile` | `FREE` | Which CLI profile the catalog bootstrap authenticates with. |
 | `git_repo_url` | this repo | Where the job clones the dbt project from at run time. |
-| `git_branch` | `main` | Which branch the job runs. |
+| `git_branch` | `feat/dbt-v2-sail-spike` | Branch **both** jobs clone. One variable on purpose: a Core vs v2 comparison only means something on identical code. |
 | `dbt_databricks_version` | `1.12.4` | Adapter the Core job (`tpch-batch`) installs into its serverless environment. |
 | `dbt_v2_package` | `dbt` | dbt v2 distribution the spike job installs: `dbt` (dbt Labs licence) or `dbt-oss` (Apache-2.0). |
 | `dbt_v2_version` | `2.0.6` | Exact version of that distribution. Never a range: the package fetches binaries when pip builds it. |
 | `dbt_v2_environment_version` | `6` | Serverless environment version of the spike job. The Core job stays on 3. |
-| `dbt_v2_git_branch` | `feat/dbt-v2-sail-spike` | Branch the spike job clones. Not `main`: the runner lives on a feature branch until proven. |
 
 **Read `plan` output before applying.** Lines starting with `-` or
 `-/+` mean destroy. On a schema, that takes its tables with it.
@@ -328,8 +327,8 @@ run-now
 ```
 
 The consequence worth understanding: **the branch a job clones is what runs.**
-The Core job follows `main`; the v2 spike follows a feature branch. There is no
-separate deployment step, so a commit on that branch is live on the next run.
+Both jobs follow the `git_branch` variable, so they always run the same code. There
+is no separate deployment step: a commit on that branch is live on the next run.
 
 ### One-time setup for the job
 

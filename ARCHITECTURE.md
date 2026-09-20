@@ -29,8 +29,8 @@ flowchart LR
 
     repo --> human
     human ==>|"creates catalog, schemas,<br/>grants, both jobs"| dbx
-    corejob -.->|"clones main at run time"| repo
-    v2job -.->|"clones a feature branch"| repo
+    corejob -.->|"clones git_branch"| repo
+    v2job -.->|"clones the same git_branch"| repo
 
     tpch --> staging
     staging -->|"merge, incremental"| marts
