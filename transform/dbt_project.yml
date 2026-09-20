@@ -20,6 +20,11 @@ models:
     staging:
       +schema: staging
       +materialized: view
+    # Intermediate models are views in the staging schema: real relations, so the
+    # lineage graph shows them, without a third schema to provision.
+    intermediate:
+      +schema: staging
+      +materialized: view
     marts:
       +schema: marts
       +materialized: table
