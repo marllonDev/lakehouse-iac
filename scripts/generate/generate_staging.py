@@ -24,6 +24,13 @@ STAGING = ROOT / "transform" / "models" / "staging"
 SNAPSHOT = json.loads((Path(__file__).parent / "samples_schema.json").read_text())
 COLUMNS = SNAPSHOT["columns"]
 
+# DESCRIBE TABLE repeats a partition column under "# Partition Information", and a
+# select that lists it twice fails with COLUMN_ALREADY_EXISTS. The snapshot is
+# already clean; this keeps a future recapture from reintroducing the bug.
+for _table, _cols in COLUMNS.items():
+    _seen = set()
+    COLUMNS[_table] = [c for c in _cols if not (c[0] in _seen or _seen.add(c[0]))]
+
 # Primary keys, by table. Composite keys are tuples. TPC-DS comes from a generator,
 # so its keys are clean and tested at error severity. The Wanderbricks tables are
 # closer to real data, so a broken key there is reported without stopping the build.

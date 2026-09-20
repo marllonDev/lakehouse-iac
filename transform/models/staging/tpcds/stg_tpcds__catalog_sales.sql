@@ -40,8 +40,7 @@ renamed as (
         cs_net_paid_inc_tax as net_paid_inc_tax,
         cs_net_paid_inc_ship as net_paid_inc_ship,
         cs_net_paid_inc_ship_tax as net_paid_inc_ship_tax,
-        cs_net_profit as net_profit,
-        cs_sold_date_sk as sold_date_sk
+        cs_net_profit as net_profit
 
     from source
 

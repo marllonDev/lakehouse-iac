@@ -26,8 +26,7 @@ renamed as (
         sr_refunded_cash as refunded_cash,
         sr_reversed_charge as reversed_charge,
         sr_store_credit as store_credit,
-        sr_net_loss as net_loss,
-        sr_returned_date_sk as returned_date_sk
+        sr_net_loss as net_loss
 
     from source
 

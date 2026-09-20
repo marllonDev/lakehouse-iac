@@ -40,8 +40,7 @@ renamed as (
         ws_net_paid_inc_tax as net_paid_inc_tax,
         ws_net_paid_inc_ship as net_paid_inc_ship,
         ws_net_paid_inc_ship_tax as net_paid_inc_ship_tax,
-        ws_net_profit as net_profit,
-        ws_sold_date_sk as sold_date_sk
+        ws_net_profit as net_profit
 
     from source
 

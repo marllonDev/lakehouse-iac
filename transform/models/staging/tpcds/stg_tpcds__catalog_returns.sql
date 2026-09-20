@@ -33,8 +33,7 @@ renamed as (
         cr_refunded_cash as refunded_cash,
         cr_reversed_charge as reversed_charge,
         cr_store_credit as store_credit,
-        cr_net_loss as net_loss,
-        cr_returned_date_sk as returned_date_sk
+        cr_net_loss as net_loss
 
     from source
 

@@ -1,5 +1,5 @@
 {
- "_note": "Column names and types of the Databricks samples tables the generators read, captured with DESCRIBE TABLE. Row counts at capture time are in 'rows'.",
+ "_note": "Column names and types of the Databricks samples tables the generators read, captured with DESCRIBE TABLE. Row counts at capture time are in 'rows'. Columns are deduplicated: DESCRIBE TABLE repeats a partition column under '# Partition Information'.",
  "columns": {
   "clickbench.hits": [
    [
@@ -695,10 +695,6 @@
    [
     "cr_net_loss",
     "decimal(7,2)"
-   ],
-   [
-    "cr_returned_date_sk",
-    "int"
    ]
   ],
   "tpcds_sf1.catalog_sales": [
@@ -837,10 +833,6 @@
    [
     "cs_net_profit",
     "decimal(7,2)"
-   ],
-   [
-    "cs_sold_date_sk",
-    "int"
    ]
   ],
   "tpcds_sf1.customer": [
@@ -1178,10 +1170,6 @@
    ],
    [
     "inv_quantity_on_hand",
-    "int"
-   ],
-   [
-    "inv_date_sk",
     "int"
    ]
   ],
@@ -1591,10 +1579,6 @@
    [
     "sr_net_loss",
     "decimal(7,2)"
-   ],
-   [
-    "sr_returned_date_sk",
-    "int"
    ]
   ],
   "tpcds_sf1.store_sales": [
@@ -1689,10 +1673,6 @@
    [
     "ss_net_profit",
     "decimal(7,2)"
-   ],
-   [
-    "ss_sold_date_sk",
-    "int"
    ]
   ],
   "tpcds_sf1.time_dim": [
@@ -1949,10 +1929,6 @@
    [
     "wr_net_loss",
     "decimal(7,2)"
-   ],
-   [
-    "wr_returned_date_sk",
-    "int"
    ]
   ],
   "tpcds_sf1.web_sales": [
@@ -2091,10 +2067,6 @@
    [
     "ws_net_profit",
     "decimal(7,2)"
-   ],
-   [
-    "ws_sold_date_sk",
-    "int"
    ]
   ],
   "tpcds_sf1.web_site": [

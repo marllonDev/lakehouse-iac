@@ -29,8 +29,7 @@ renamed as (
         ss_coupon_amt as coupon_amt,
         ss_net_paid as net_paid,
         ss_net_paid_inc_tax as net_paid_inc_tax,
-        ss_net_profit as net_profit,
-        ss_sold_date_sk as sold_date_sk
+        ss_net_profit as net_profit
 
     from source
 
