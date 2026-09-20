@@ -143,7 +143,7 @@ models:
 
   - name: agg_tpch_shipping_modes
     description: >
-      How fast and how reliably each shipping mode delivers.
+      How fast and how reliably each shipping mode delivers, against the days it promises.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -249,7 +249,7 @@ models:
 
   - name: agg_tpch_priority_service
     description: >
-      Whether higher-priority orders ship faster.
+      Whether higher-priority orders ship faster, and how many orders count once weighted by urgency.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

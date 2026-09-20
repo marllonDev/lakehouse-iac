@@ -194,16 +194,19 @@ group by return_flag, order_status
             "agg_tpch_shipping_modes",
             """
 select
-    ship_mode,
-    count(*)                                            as lines,
-    avg(days_to_ship)                                   as avg_days_to_ship,
-    avg(case when is_late then 1.0 else 0.0 end)        as late_share,
-    sum(net_amount)                                     as net_revenue
+    f.ship_mode,
+    s.sla_days,
+    count(*)                                                        as lines,
+    avg(f.days_to_ship)                                             as avg_days_to_ship,
+    avg(case when f.is_late then 1.0 else 0.0 end)                  as late_share,
+    {{ safe_divide('sum(case when f.days_to_ship <= s.sla_days then 1 else 0 end)', 'count(*)') }} as within_sla_share,
+    sum(f.net_amount)                                               as net_revenue
 
-from {{ ref('fct_tpch_order_lines') }}
-group by ship_mode
+from {{ ref('fct_tpch_order_lines') }} f
+left join {{ ref('seed_ship_mode_sla') }} s on f.ship_mode = s.ship_mode
+group by f.ship_mode, s.sla_days
 """,
-            "How fast and how reliably each shipping mode delivers.",
+            "How fast and how reliably each shipping mode delivers, against the days it promises.",
             grain=("ship_mode",),
             tests=merge(not_null("ship_mode"), {"late_share": [between(0, 1)]}),
         ),
@@ -313,15 +316,18 @@ group by date_trunc('month', shipped_at)
             "agg_tpch_priority_service",
             """
 select
-    order_priority,
-    count(distinct order_key)                           as orders,
-    avg(days_to_ship)                                   as avg_days_to_ship,
-    avg(case when is_late then 1.0 else 0.0 end)        as late_share
+    f.order_priority,
+    w.priority_weight,
+    count(distinct f.order_key)                         as orders,
+    count(distinct f.order_key) * w.priority_weight     as weighted_orders,
+    avg(f.days_to_ship)                                 as avg_days_to_ship,
+    avg(case when f.is_late then 1.0 else 0.0 end)      as late_share
 
-from {{ ref('fct_tpch_order_lines') }}
-group by order_priority
+from {{ ref('fct_tpch_order_lines') }} f
+left join {{ ref('seed_tpch_priority_weights') }} w on f.order_priority = w.order_priority
+group by f.order_priority, w.priority_weight
 """,
-            "Whether higher-priority orders ship faster.",
+            "Whether higher-priority orders ship faster, and how many orders count once weighted by urgency.",
             grain=("order_priority",),
             tests=not_null("order_priority"),
         ),

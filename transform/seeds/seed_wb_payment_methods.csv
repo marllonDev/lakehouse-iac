@@ -1,0 +1,6 @@
+payment_method,is_instant,fee_rate
+paypal,true,0.029
+credit_card,true,0.024
+apple_pay,true,0.015
+bank_transfer,false,0.005
+google_pay,true,0.015

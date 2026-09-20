@@ -19,7 +19,7 @@ select
     views.page_views,
     views.viewers,
     coalesce(booked.bookings, 0)                                                as bookings,
-    coalesce(booked.bookings, 0) / nullif(views.viewers, 0)                     as bookings_per_viewer
+    {{ safe_divide('coalesce(booked.bookings, 0)', 'views.viewers') }}                     as bookings_per_viewer
 
 from views
 left join booked on views.property_id = booked.property_id

@@ -28,3 +28,8 @@ models:
     marts:
       +schema: marts
       +materialized: table
+
+seeds:
+  lakehouse:
+    # Seeds are small reference tables; they sit next to the staging models.
+    +schema: staging

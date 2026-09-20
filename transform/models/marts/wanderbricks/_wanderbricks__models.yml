@@ -289,7 +289,7 @@ models:
 
   - name: agg_wb_payment_method_mix
     description: >
-      Payments and money by method and outcome.
+      Payments and money by method and outcome, with the fees the method would charge.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

@@ -1,0 +1,18 @@
+version: 2
+
+unit_tests:
+  - name: test_conversion_funnel_survives_a_property_nobody_booked
+    model: agg_wb_conversion_funnel
+    given:
+      - input: ref('fct_wb_page_views')
+        rows:
+          - {property_id: 1, user_id: 100}
+          - {property_id: 1, user_id: 101}
+          - {property_id: 2, user_id: 100}
+      - input: ref('fct_wb_bookings')
+        rows:
+          - {booking_id: 1, property_id: 1}
+    expect:
+      rows:
+        - {property_id: 1, page_views: 2, viewers: 2, bookings: 1, bookings_per_viewer: 0.5}
+        - {property_id: 2, page_views: 1, viewers: 1, bookings: 0, bookings_per_viewer: 0}

@@ -432,7 +432,7 @@ select
     views.page_views,
     views.viewers,
     coalesce(booked.bookings, 0)                                                as bookings,
-    coalesce(booked.bookings, 0) / nullif(views.viewers, 0)                     as bookings_per_viewer
+    {{ safe_divide('coalesce(booked.bookings, 0)', 'views.viewers') }}                     as bookings_per_viewer
 
 from views
 left join booked on views.property_id = booked.property_id
@@ -478,15 +478,18 @@ group by date_trunc('month', created_at)
             "agg_wb_payment_method_mix",
             """
 select
-    payment_method,
-    status,
+    p.payment_method,
+    p.status,
+    m.is_instant,
     count(*)                    as payments,
-    sum(amount)                 as amount
+    sum(p.amount)               as amount,
+    sum(p.amount) * m.fee_rate  as estimated_fees
 
-from {{ ref('fct_wb_payments') }}
-group by payment_method, status
+from {{ ref('fct_wb_payments') }} p
+left join {{ ref('seed_wb_payment_methods') }} m on p.payment_method = m.payment_method
+group by p.payment_method, p.status, m.is_instant, m.fee_rate
 """,
-            "Payments and money by method and outcome.",
+            "Payments and money by method and outcome, with the fees the method would charge.",
             grain=("payment_method", "status"),
             tests=not_null("payment_method", "status"),
         ),
