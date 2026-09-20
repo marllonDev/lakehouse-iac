@@ -78,9 +78,19 @@ def main():
     # which leaves __file__ undefined. The compiled code object still carries the
     # real path of the file inside the Git checkout.
     script = Path(main.__code__.co_filename).resolve()
-    project_dir = script.parents[1] / "transform"
-    if not (project_dir / "dbt_project.yml").exists():
-        sys.exit(f"no dbt project at {project_dir}; is this script running from a Git checkout?")
+    checkout_project = script.parents[1] / "transform"
+    if not (checkout_project / "dbt_project.yml").exists():
+        sys.exit(f"no dbt project at {checkout_project}; is this script running from a Git checkout?")
+
+    # dbt v2 writes logs/, target/ and dbt_packages/ next to the project, and the
+    # Git checkout under /Workspace refuses directory creation from a native
+    # process (os error 22). Run from a scratch copy on local disk instead.
+    project_dir = Path(tempfile.mkdtemp(prefix="dbt-project-")) / "transform"
+    shutil.copytree(
+        checkout_project,
+        project_dir,
+        ignore=shutil.ignore_patterns("target", "dbt_packages", "logs", ".user.yml"),
+    )
 
     # Imported late so --help works without the SDK installed.
     from databricks.sdk import WorkspaceClient
