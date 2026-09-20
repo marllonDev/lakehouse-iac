@@ -1,5 +1,7 @@
-# Builds the whole dbt project on Databricks with dbt Core, so nothing about the
-# project has to execute on a developer machine.
+# Builds the whole dbt project on Databricks with dbt Core through the native
+# dbt_task job type, so nothing about the project has to execute on a developer
+# machine. The engine benchmark uses bench.tf instead, which runs both engines
+# through one shared Python runner.
 #
 # It has no schedule and no continuous trigger, so it never runs on its own —
 # it is started by hand with `databricks jobs run-now`.
@@ -19,7 +21,7 @@ resource "databricks_job" "tpch_batch" {
     environment_key = "dbt"
 
     spec {
-      client = "3"
+      environment_version = var.dbt_environment_version
 
       # Serverless job compute starts empty: without this the task fails with
       # "dbt: command not found". Same pin as the transform job.

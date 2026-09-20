@@ -100,12 +100,12 @@ variable "dbt_v2_version" {
   default     = "2.0.6"
 }
 
-variable "dbt_v2_environment_version" {
+variable "dbt_environment_version" {
   description = <<-EOT
-    Serverless environment version (base environment) of the dbt v2 spike job.
-    Version 6 was released on 2026-09-03 with the same Python as version 3
-    (3.12.3), a newer Ubuntu patch level, and Databricks Connect 19. The
-    production and baseline jobs stay on version 3; only the spike moves.
+    Serverless environment version (base environment) of every dbt job. All of
+    them share it on purpose: a comparison between dbt Core and dbt v2 is only
+    fair when the base environment is identical. Version 6 was released on
+    2026-09-03 with Python 3.12.3 and Databricks Connect 19.
   EOT
   type        = string
   default     = "6"
