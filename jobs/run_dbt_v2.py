@@ -38,7 +38,7 @@ lakehouse:
       schema: {schema}
       auth_type: token
       token: "{{{{ env_var('DBT_DATABRICKS_TOKEN') }}}}"
-      threads: 4
+      threads: {threads}
 """
 
 
@@ -47,6 +47,12 @@ def parse_args():
     parser.add_argument("--http-path", required=True, help="SQL warehouse HTTP path")
     parser.add_argument("--catalog", required=True, help="Unity Catalog catalog dbt writes into")
     parser.add_argument("--schema", default="staging", help="Default schema in the generated profile")
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=8,
+        help="dbt threads. 8 matches the dbt_task Core job, so timings are comparable.",
+    )
     parser.add_argument(
         "--command",
         action="append",
@@ -99,7 +105,7 @@ def main():
     token = workspace.config.authenticate()["Authorization"].removeprefix("Bearer ")
 
     profiles_dir = Path(tempfile.mkdtemp(prefix="profiles-"))
-    (profiles_dir / "profiles.yml").write_text(PROFILE.format(schema=args.schema))
+    (profiles_dir / "profiles.yml").write_text(PROFILE.format(schema=args.schema, threads=args.threads))
 
     env = {
         **os.environ,
@@ -124,7 +130,11 @@ def main():
             break
 
     print("RESULT " + json.dumps(results))
-    sys.exit(0 if all(r["rc"] == 0 for r in results) else 1)
+
+    # Raise only on failure. A Databricks task treats any SystemExit as a failed
+    # run, including sys.exit(0), so a successful run must simply return.
+    if not all(r["rc"] == 0 for r in results):
+        sys.exit(1)
 
 
 if __name__ == "__main__":
