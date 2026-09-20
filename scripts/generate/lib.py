@@ -19,12 +19,17 @@ class Model:
     sql: str
     description: str
     grain: tuple = ()  # columns that together identify one row; tested as unique
+    grain_severity: str = "error"
     tests: dict = field(default_factory=dict)  # column -> list of tests
     config: str = ""  # optional {{ config(...) }} body, e.g. "materialized='ephemeral'"
 
 
 def not_null(*columns):
     return {c: ["not_null"] for c in columns}
+
+
+def not_null_warn(*columns):
+    return {c: [warn("not_null")] for c in columns}
 
 
 def merge(*dicts):
@@ -35,8 +40,21 @@ def merge(*dicts):
     return out
 
 
-def relationship(to, field_name):
-    return ("relationships", {"to": f"ref('{to}')", "field": field_name})
+def relationship(to, field_name, severity=None):
+    return _with_severity(("relationships", {"to": f"ref('{to}')", "field": field_name}), severity)
+
+
+def _with_severity(test, severity):
+    """Attach a severity to a test, for data that is real enough to be imperfect."""
+    if severity is None:
+        return test
+    name = test if isinstance(test, str) else test[0]
+    args = {} if isinstance(test, str) else test[1]
+    return (name, args, {"severity": severity})
+
+
+def warn(test):
+    return _with_severity(test, "warn")
 
 
 def accepted_values(*values):
@@ -55,9 +73,13 @@ def _render_test(test, indent):
     pad = " " * indent
     if isinstance(test, str):
         return [f"{pad}- {test}"]
-    name, args = test
-    lines = [f"{pad}- {name}:", f"{pad}    arguments:"]
-    lines += [f"{pad}      {k}: {v}" for k, v in args.items()]
+    name, args = test[0], test[1]
+    config = test[2] if len(test) > 2 else {}
+    lines = [f"{pad}- {name}:"]
+    if args:
+        lines += [f"{pad}    arguments:"] + [f"{pad}      {k}: {v}" for k, v in args.items()]
+    if config:
+        lines += [f"{pad}    config:"] + [f"{pad}      {k}: {v}" for k, v in config.items()]
     return lines
 
 
@@ -79,6 +101,8 @@ def render_yml(models):
                 "              combination_of_columns:",
                 cols,
             ]
+            if m.grain_severity != "error":
+                out += ["          config:", f"            severity: {m.grain_severity}"]
         if m.tests:
             out.append("    columns:")
             for column, tests in m.tests.items():
