@@ -1,14 +1,11 @@
-# The TPC-H batch models have no job of their own: until now they were only ever
-# built by running dbt from a laptop. This job runs them on Databricks instead,
-# so nothing about the project has to execute on a developer machine.
+# Builds the whole dbt project on Databricks with dbt Core, so nothing about the
+# project has to execute on a developer machine.
 #
 # It has no schedule and no continuous trigger, so it never runs on its own —
-# it is started by hand with `databricks jobs run-now`. Every streaming model is
-# excluded: those belong to wikipedia-transform and depend on files that only
-# the ingest job produces.
+# it is started by hand with `databricks jobs run-now`.
 resource "databricks_job" "tpch_batch" {
   name        = "${var.environment}-${var.project}-tpch-batch"
-  description = "Builds the TPC-H batch models (staging views and the dimensional marts). Manual trigger only."
+  description = "Builds the dbt project with dbt Core. Manual trigger only."
 
   git_source {
     url      = var.git_repo_url
@@ -40,15 +37,14 @@ resource "databricks_job" "tpch_batch" {
       warehouse_id       = data.databricks_sql_warehouse.this.id
 
       # A dbt task generates its own profile and ignores the one in the repo, so
-      # the catalog has to be declared here (see streaming.tf).
+      # the catalog has to be declared here. Without it dbt falls back to the
+      # legacy Hive metastore and fails with UC_HIVE_METASTORE_DISABLED_EXCEPTION.
       catalog = local.catalog_name
       schema  = "staging"
 
       commands = [
         "dbt deps",
-        # `st_wikipedia_edits+` is the streaming table and everything built on
-        # it; excluding it leaves exactly the TPC-H models.
-        "dbt build --exclude st_wikipedia_edits+",
+        "dbt build",
       ]
     }
   }

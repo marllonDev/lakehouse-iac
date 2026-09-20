@@ -9,7 +9,7 @@
 # their own commands at trigger time, for example:
 #
 #   databricks jobs run-now <id> --python-params \
-#     '["--http-path","...","--catalog","dev_lakehouse","--command","deps","--command","build --exclude st_wikipedia_edits+"]'
+#     '["--http-path","...","--catalog","dev_lakehouse","--command","deps","--command","build"]'
 #
 # Run-time parameters replace the defaults below entirely.
 resource "databricks_job" "dbt_v2_spike" {
