@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: stg_clickbench__hits
+    description: >
+      One row per web analytics event. Keeps the 22 of 105 columns the marts use,
+      renamed to snake case.
+    columns:
+      - name: watch_id
+        data_tests: [not_null]
+      - name: event_at
+        data_tests: [not_null]

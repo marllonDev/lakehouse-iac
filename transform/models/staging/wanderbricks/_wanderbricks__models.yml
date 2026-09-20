@@ -1,0 +1,195 @@
+version: 2
+
+models:
+  - name: stg_wanderbricks__amenities
+    description: One row per amenities row in samples.wanderbricks.
+    columns:
+      - name: amenity_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__booking_updates
+    description: One row per booking updates row in samples.wanderbricks.
+    columns:
+      - name: booking_update_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__bookings
+    description: One row per bookings row in samples.wanderbricks.
+    columns:
+      - name: booking_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__clickstream
+    description: One row per clickstream row in samples.wanderbricks.
+
+  - name: stg_wanderbricks__countries
+    description: One row per countries row in samples.wanderbricks.
+    columns:
+      - name: country_code
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__customer_support_logs
+    description: One row per customer support logs row in samples.wanderbricks.
+    columns:
+      - name: ticket_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__destinations
+    description: One row per destinations row in samples.wanderbricks.
+    columns:
+      - name: destination_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__employees
+    description: One row per employees row in samples.wanderbricks.
+    columns:
+      - name: employee_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__hosts
+    description: One row per hosts row in samples.wanderbricks.
+    columns:
+      - name: host_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__page_views
+    description: One row per page views row in samples.wanderbricks.
+    columns:
+      - name: view_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__payments
+    description: One row per payments row in samples.wanderbricks.
+    columns:
+      - name: payment_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__properties
+    description: One row per properties row in samples.wanderbricks.
+    columns:
+      - name: property_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__property_amenities
+    description: One row per property amenities row in samples.wanderbricks.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - property_id
+                - amenity_id
+          config:
+            severity: warn
+    columns:
+      - name: property_id
+        data_tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: amenity_id
+        data_tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__property_images
+    description: One row per property images row in samples.wanderbricks.
+    columns:
+      - name: image_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__reviews
+    description: One row per reviews row in samples.wanderbricks.
+    columns:
+      - name: review_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_wanderbricks__users
+    description: One row per users row in samples.wanderbricks.
+    columns:
+      - name: user_id
+        data_tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn

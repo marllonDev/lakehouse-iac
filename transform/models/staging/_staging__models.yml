@@ -74,3 +74,51 @@ models:
         data_tests: [unique, not_null]
       - name: region_name
         data_tests: [unique, not_null]
+
+  - name: stg_suppliers
+    description: One row per supplier, renamed and recast from samples.tpch.supplier.
+    columns:
+      - name: supplier_key
+        data_tests: [unique, not_null]
+      - name: nation_key
+        data_tests:
+          - relationships:
+              arguments:
+                  to: ref('stg_nations')
+                  field: nation_key
+
+  - name: stg_parts
+    description: One row per part, renamed and recast from samples.tpch.part.
+    columns:
+      - name: part_key
+        data_tests: [unique, not_null]
+      - name: retail_price
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                  min_value: 0
+                  inclusive: false
+
+  - name: stg_part_suppliers
+    description: One row per supplier of a part, from samples.tpch.partsupp.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - part_key
+                - supplier_key
+    columns:
+      - name: part_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                  to: ref('stg_parts')
+                  field: part_key
+      - name: supplier_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                  to: ref('stg_suppliers')
+                  field: supplier_key
