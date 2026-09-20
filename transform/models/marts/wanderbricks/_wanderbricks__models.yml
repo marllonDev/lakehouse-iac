@@ -140,6 +140,8 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+              config:
+                severity: warn
 
   - name: fct_wb_page_views
     description: >

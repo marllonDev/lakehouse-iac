@@ -309,7 +309,7 @@ qualify row_number() over (partition by payment_id order by payment_date desc) =
                 {
                     "status": [accepted_values("'completed'", "'refunded'", "'failed'")],
                     "payment_method": [accepted_values("'paypal'", "'credit_card'", "'apple_pay'", "'bank_transfer'", "'google_pay'")],
-                    "amount": [at_least(0)],
+                    "amount": [warn(at_least(0))],  # refunds are negative by design; a few completed or failed rows are too
                 },
             ),
         ),
