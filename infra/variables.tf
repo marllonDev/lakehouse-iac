@@ -159,3 +159,14 @@ variable "dbt_v2_git_branch" {
   type        = string
   default     = "feat/dbt-v2-sail-spike"
 }
+
+variable "dbt_v2_environment_version" {
+  description = <<-EOT
+    Serverless environment version (base environment) of the dbt v2 spike job.
+    Version 6 was released on 2026-09-03 with the same Python as version 3
+    (3.12.3), a newer Ubuntu patch level, and Databricks Connect 19. The
+    production and baseline jobs stay on version 3; only the spike moves.
+  EOT
+  type        = string
+  default     = "6"
+}

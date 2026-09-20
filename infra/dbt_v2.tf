@@ -29,7 +29,10 @@ resource "databricks_job" "dbt_v2_spike" {
     environment_key = "dbt_v2"
 
     spec {
-      client = "3"
+      # Newer than the production jobs on purpose: this is the spike, and the
+      # question it answers includes whether dbt v2 is happy on the latest base
+      # environment. `client` is the legacy name for the same setting.
+      environment_version = var.dbt_v2_environment_version
 
       # Exact pin: dbt v2 ships as a sdist that fetches its binaries when pip
       # builds it, so uv.lock alone cannot make two installs identical. Pinning
