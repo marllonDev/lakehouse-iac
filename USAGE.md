@@ -22,11 +22,16 @@ databricks auth login --host https://<your-workspace>.cloud.databricks.com --pro
 terraform -chdir=infra init
 terraform -chdir=infra apply -var environment=dev
 
-# 5. Build the models
-cd transform && dbt deps && dbt build
+# 5. Build the models — on Databricks, not on this machine
+databricks jobs run-now "$(terraform -chdir=infra output -raw tpch_batch_job_id)"
 ```
 
 Step 2 must be repeated in every new terminal. Steps 1, 3, and 4 are one-time.
+
+**Where dbt runs.** The supported path is a Databricks job: this machine only
+edits code, runs Terraform, and calls the Databricks CLI. `dbt` is still
+installed into `.venv/` by step 1, and the local commands under `transform/`
+below still work, but nothing in the workflow depends on them.
 
 ---
 
@@ -34,15 +39,15 @@ Step 2 must be repeated in every new terminal. Steps 1, 3, and 4 are one-time.
 
 ```
 lakehouse-iac/
-├── infra/          Terraform    — creates the containers
+├── infra/          Terraform    — creates the containers and the jobs
 ├── transform/      dbt          — fills the containers
-├── ingest/         Python       — brings data in from outside
+├── jobs/           Python       — entry points that run inside Databricks jobs
 ├── scripts/        Bash         — installs tooling, sets up the shell
 ├── .github/        CI           — checks that runs on every push
 ```
 
-Three of these are the pipeline: `ingest/` → `transform/` → and `infra/` holding
-it all up. The rest is tooling.
+Three of these are the pipeline: `transform/`, `jobs/`, and `infra/` holding it
+all up. The rest is tooling.
 
 ---
 
@@ -56,8 +61,9 @@ Creates and governs the Unity Catalog objects. Never creates a table.
 | `providers.tf` | Provider block. Empty on purpose: auth comes from the CLI profile, so no secrets in code. |
 | `variables.tf` | Every knob. Read this first when you want to change behaviour. |
 | `main.tf` | Catalog, schemas, grants, and the SQL warehouse lookup. |
-| `streaming.tf` | The landing volume and the Wikimedia ingestion job. |
-| `outputs.tf` | Values Terraform hands back — the dbt HTTP path, the job URL, the landing path. |
+| `batch.tf` | The `tpch-batch` job: dbt Core through the native `dbt_task`. |
+| `dbt_v2.tf` | The `dbt-v2-spike` job: dbt v2 through a Python task. |
+| `outputs.tf` | Values Terraform hands back — the dbt HTTP path and the job ids and URLs. |
 | `terraform.tfvars.example` | Template. Copy to `terraform.tfvars` (gitignored) to stop passing `-var` on every command. |
 | `.terraform.lock.hcl` | Provider checksum lock. Committed on purpose so every machine resolves identically. |
 | `terraform.tfstate` | What Terraform believes exists. Local, gitignored, **do not delete** — losing it orphans the real resources. |
@@ -81,43 +87,52 @@ Almost everything is a variable. To change behaviour, edit the `default` in
 |---|---|---|
 | `environment` | *required* | Catalog name prefix. `prod` → catalog `prod_lakehouse`. |
 | `project` | `lakehouse` | The other half of the catalog name. |
-| `schemas` | `raw`, `staging`, `marts` | Which schemas exist. Add a key, re-apply, it appears. |
+| `schemas` | `staging`, `marts` | Which schemas exist. Add a key, re-apply, it appears. |
 | `sql_warehouse_name` | `Serverless Starter Warehouse` | Which warehouse to look up and hand to dbt. |
 | `databricks_profile` | `FREE` | Which CLI profile the catalog bootstrap authenticates with. |
 | `git_repo_url` | this repo | Where the job clones the dbt project from at run time. |
 | `git_branch` | `main` | Which branch the job runs. |
-| `ingest_pause_status` | `UNPAUSED` | `UNPAUSED` keeps the firehose connection open permanently. `PAUSED` stops it without destroying the job. |
-| `ingest_batch_seconds` | `60` | How often ingestion flushes a landing file. The floor on end-to-end latency. |
-| `dbt_schedule_cron` | every 5 min | Quartz cron for the transform job. Must exceed a full run — see below. |
-| `wikis` | `enwiki,ptwiki` | Which wikis to keep. Empty string keeps all of them. |
-| `dbt_databricks_version` | `1.12.4` | Adapter installed into the job's serverless environment. Keep in step with `pyproject.toml`. |
+| `dbt_databricks_version` | `1.12.4` | Adapter the Core job (`tpch-batch`) installs into its serverless environment. |
+| `dbt_v2_package` | `dbt` | dbt v2 distribution the spike job installs: `dbt` (dbt Labs licence) or `dbt-oss` (Apache-2.0). |
+| `dbt_v2_version` | `2.0.6` | Exact version of that distribution. Never a range: the package fetches binaries when pip builds it. |
+| `dbt_v2_environment_version` | `6` | Serverless environment version of the spike job. The Core job stays on 3. |
+| `dbt_v2_git_branch` | `feat/dbt-v2-sail-spike` | Branch the spike job clones. Not `main`: the runner lives on a feature branch until proven. |
 
 **Read `plan` output before applying.** Lines starting with `-` or
 `-/+` mean destroy. On a schema, that takes its tables with it.
 
-### Ingestion and transformation are two independent jobs
+### The jobs
 
-An earlier version chained them as two tasks in one job, the second gated
-behind the first with `depends_on`. That is a real trap worth naming: an
-always-on ingest task never finishes, so a task waiting on it never starts —
-the dbt build would never have run at all. They are separate jobs now, with no
-dependency between them. Ingestion holds the connection open indefinitely;
-the transform job runs on its own schedule and picks up whatever Auto Loader
-finds waiting, regardless of what ingestion is doing at that moment.
+Both jobs have no trigger: nothing runs until you start it with
+`databricks jobs run-now`.
 
-`dbt_schedule_cron`'s interval must clear one full run, or the overlapping
-trigger is dropped with `MAX_CONCURRENT_RUNS_EXCEEDED` rather than queued —
-this happened on the very first tuning pass here: a 3-minute default died on
-its second trigger because the run (cold environment, first execution) took
-254.7 seconds. Warm runs measured afterward took 106–115 seconds. Five minutes
-clears both with margin.
+| Job | Engine | How it runs dbt |
+|---|---|---|
+| `dev-lakehouse-tpch-batch` | dbt Core 1.12 + `dbt-databricks` | the native `dbt_task` |
+| `dev-lakehouse-dbt-v2-spike` | dbt v2 | a Python task, `jobs/run_dbt_v2.py` |
 
-To stop consuming Free Edition's serverless allowance between demos without
-losing anything already built:
+`dbt_task` only supports dbt Core with the `dbt-databricks` package (the
+Databricks documentation says so and its examples pin `<2.0.0`), so dbt v2 needs
+a task of its own. The runner is described under `jobs/` below.
+
+The spike job's default commands are `deps` and `parse`, which never touch the
+warehouse. Real runs pass their own at trigger time, which replaces the defaults
+entirely:
 
 ```bash
-terraform -chdir=infra apply -var environment=dev -var ingest_pause_status=PAUSED
+databricks jobs run-now --no-wait -o json --json '{
+  "job_id": <id>,
+  "python_params": ["--http-path", "/sql/1.0/warehouses/<warehouse>",
+                    "--catalog", "dev_lakehouse",
+                    "--command", "deps", "--command", "build"]
+}'
 ```
+
+`--python-params` is not a flag of this CLI version; parameters go in the JSON body.
+
+**Read the trigger's output.** A `run-now` that fails to start prints nothing
+useful into a shell variable, and a polling loop around an empty run id waits
+forever. Check the id before polling.
 
 ---
 
@@ -127,13 +142,12 @@ Turns queries into tables. Never creates a schema.
 
 | File / folder | What it holds |
 |---|---|
-| `dbt_project.yml` | Project config: which model folder writes into which schema, and the `wikipedia_landing_path` var. |
+| `dbt_project.yml` | Project config: which model folder writes into which schema. |
 | `profiles.yml` | Connection settings. No secrets — host and warehouse come from environment variables. |
 | `packages.yml` | Third-party dbt packages. Currently `dbt_utils`. |
 | `package-lock.yml` | Resolved package versions. Committed for reproducibility. |
 | `macros/` | Reusable Jinja. Holds the `generate_schema_name` override. |
 | `models/staging/` | One view per TPC-H source table. Renaming and recasting only. |
-| `models/streaming/` | The streaming table reading the landing volume. |
 | `models/marts/` | Business-facing tables. |
 | `target/` | Compiled SQL, run artifacts, `manifest.json`. Gitignored, safe to delete. |
 | `dbt_packages/` | Installed packages. Gitignored, recreated by `dbt deps`. |
@@ -152,16 +166,6 @@ business logic.
 | `stg_nations` | `samples.tpch.nation` |
 | `stg_regions` | `samples.tpch.region` |
 
-**`models/streaming/`** — materialised as a **streaming table**.
-
-| Model | Reads |
-|---|---|
-| `st_wikipedia_edits` | JSON files in the landing volume, incrementally via Auto Loader |
-
-Auto Loader tracks which files it has already consumed, so refreshing is cheap
-and never double-counts. This is why the ingestion task writes immutable files
-with unique names and never rewrites them.
-
 **`models/marts/`** — materialised as **tables**.
 
 | Model | Grain | Materialisation |
@@ -169,12 +173,6 @@ with unique names and never rewrites them.
 | `dim_customers` | one customer | table |
 | `fct_orders` | one order | incremental, merge on `order_key` |
 | `agg_sales_by_month` | month × region × segment | table |
-| `fct_wikipedia_edits` | one edit event | incremental, merge on `edit_key` |
-| `agg_wikipedia_activity` | minute × wiki | table |
-
-`fct_wikipedia_edits` carries `ingestion_lag_seconds` — the delay between the
-edit happening on Wikipedia and this pipeline landing it. Pipeline latency is a
-column you can query, not a claim in a README.
 
 ### Commands
 
@@ -189,7 +187,6 @@ dbt test                       # tests only
 dbt build -s dim_customers     # one model
 dbt build -s marts             # everything in the marts folder
 dbt build -s +fct_orders       # fct_orders and everything upstream of it
-dbt build -s st_wikipedia_edits+   # the streaming table and everything downstream
 dbt build --full-refresh       # rebuild incremental models from scratch
 
 dbt compile -s fct_orders      # write the final SQL to target/ without running it
@@ -221,35 +218,40 @@ with every `ref()` resolved to a real table name.
 3. `dbt build -s <name>`.
 
 Naming: `stg_` for staging, `dim_` for a thing, `fct_` for an event, `agg_` for
-a rollup, `st_` for a streaming table.
+a rollup.
 
 ---
 
-## `ingest/` — Python
+## `jobs/` — Python
 
-The one part dbt cannot do. dbt has no HTTP client and no long-running process,
-so bringing data in from outside the warehouse needs real code.
+Entry points that run inside Databricks jobs. Nothing here is run from a laptop:
+the code needs the job's identity and the job's compute.
 
 | File | What it does |
 |---|---|
-| `wikipedia_stream.py` | Holds the Wikimedia EventStreams SSE connection open and flushes batches of events as JSON Lines files into the landing volume. |
+| `run_dbt_v2.py` | Runs dbt v2 inside a serverless job, standing in for `dbt_task`. |
 
-It is written in Databricks notebook source format (`# Databricks notebook
-source` header, `# COMMAND ----------` cell separators) so the job can run it
-straight from Git without a build step, while it stays a readable `.py` file in
-the repository.
+What the runner does, in order:
 
-Parameters, passed by the job from Terraform variables:
+1. Gets a token from the job's own identity through the Databricks SDK. No
+   personal access token and no secret file exist anywhere.
+2. Writes a throwaway `profiles.yml` that reads every connection value from
+   environment variables. The token is never written to disk and is scrubbed
+   from the streamed output.
+3. Copies `transform/` to local disk and runs from the copy. The Git checkout a
+   job runs from lives under `/Workspace/Repos/.internal`, and a native process
+   cannot create directories there (`os error 22`), while dbt v2 needs `logs/`,
+   `target/` and `dbt_packages/` next to the project.
+4. Runs each `--command` in order, stops at the first failure, and prints one
+   `RESULT` line with the duration of each.
 
-| Widget | Meaning |
-|---|---|
-| `volume_path` | Where to write. Must match dbt's `wikipedia_landing_path` var. |
-| `batch_seconds` | How often to flush a file. |
-| `max_seconds` | How long to run. `0` means never exit — continuous mode. |
-| `wikis` | Comma-separated wiki codes to keep. Empty keeps all. |
+It does not install dbt: the job environment pins the distribution and version.
+It raises `SystemExit` only on failure, because a Databricks task treats any
+`SystemExit`, including `sys.exit(0)`, as a failed run.
 
-You do not run this locally. It runs as a task on Databricks, because that is
-where the volume is.
+Arguments: `--http-path`, `--catalog` (required); `--schema` (default
+`staging`); `--threads` (default 8, the same as the Core job, so timings are
+comparable); `--command` (repeatable).
 
 ---
 
@@ -320,17 +322,14 @@ your laptop, so the dbt project has to reach it somehow. This project uses
 branch and runs from that checkout.
 
 ```
-job triggers
-  └─ task "ingest"     clone repo → run ingest/wikipedia_stream.py
-  │                    → writes JSON files into the landing volume
-  └─ task "transform"  same checkout → dbt deps, dbt build
-                       → dbt reads the volume, materialises the models
+run-now
+  └─ clone repo at the configured branch
+  └─ dbt deps, dbt build   (Core: dbt_task · v2: jobs/run_dbt_v2.py)
 ```
 
-The consequence worth understanding: **the `main` branch on GitHub is what runs
-in production.** Merge, and the next execution uses the new code. There is no
-separate deployment step — which also means an untested commit on `main` is
-live on the next trigger.
+The consequence worth understanding: **the branch a job clones is what runs.**
+The Core job follows `main`; the v2 spike follows a feature branch. There is no
+separate deployment step, so a commit on that branch is live on the next run.
 
 ### One-time setup for the job
 
@@ -350,7 +349,7 @@ Then:
 
 ```bash
 terraform -chdir=infra apply -var environment=dev
-databricks jobs run-now --job-id "$(terraform -chdir=infra output -raw wikipedia_job_id)"
+databricks jobs run-now "$(terraform -chdir=infra output -raw tpch_batch_job_id)"
 ```
 
 ---
@@ -365,8 +364,10 @@ databricks jobs run-now --job-id "$(terraform -chdir=infra output -raw wikipedia
 | Terraform: `Metastore storage root URL does not exist` | The catalog is being created through the REST API instead of SQL | Expected on Free Edition — see [SPEC.md](SPEC.md) §7 |
 | Job fails `REPOSITORY_CHECKOUT_FAILED` / `UNAUTHENTICATED` | No Git credential linked in Databricks | Settings → Linked accounts → link GitHub |
 | Job fails `REPOSITORY_CHECKOUT_FAILED` / `PERMISSION_DENIED` | Account linked, but the Databricks GitHub App is not installed on the repository | Install at github.com/apps/databricks/installations/new; if scoped to selected repositories, add this one |
-| Job task fails `dbt: command not found` | Serverless environments start empty | Declare the adapter in the environment's `dependencies` — `dbt_databricks_version` handles this |
+| Job task fails `dbt: command not found` | Serverless environments start empty | Declare the adapter in the environment's `dependencies` — `dbt_databricks_version` handles it for the Core job and `dbt_v2_package` for the spike |
 | dbt fails `UC_HIVE_METASTORE_DISABLED_EXCEPTION` | A dbt task generates its own profile and ignores `profiles.yml`; with no catalog it falls back to the legacy metastore | Set `catalog` and `schema` on the `dbt_task` block |
-| Runs silently missing, `MAX_CONCURRENT_RUNS_EXCEEDED` | The transform schedule fires faster than a run completes; with concurrency capped at one the trigger is dropped, not queued | Widen `dbt_schedule_cron` |
-| Streaming table returns zero rows | No files have landed yet | Run the ingest task first, then `dbt build -s st_wikipedia_edits+` |
+| v2 job: `NameError: name '__file__' is not defined` | A Databricks Python task runs the script through `exec(compile(...))` | Use `main.__code__.co_filename`, as the runner does |
+| v2 job: `Failed to create directory ... (os error 22)` | The Git checkout under `/Workspace/Repos/.internal` refuses directory creation from a native process | Run from a scratch copy on local disk, as the runner does |
+| v2 job reported failed with `SystemExit: 0` although dbt succeeded | A Databricks task treats every `SystemExit` as a failure | Return normally on success |
+| `databricks jobs run-now`: `unknown flag: --python-params` | That flag does not exist in this CLI version | Pass `python_params` in the `--json` body |
 | dbt model exists but is empty after a code change | Incremental model kept its old rows | `dbt build -s <model> --full-refresh` |

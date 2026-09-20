@@ -30,9 +30,10 @@ one would drop what the other created, and the state would drift.
 
 ```
 lakehouse-iac/
-├── infra/                    ← Terraform. The containers.
+├── infra/                    ← Terraform. The containers and the jobs.
 │   ├── main.tf                  catalog, schemas, grants, warehouse lookup
-│   ├── streaming.tf             landing volume and the Wikimedia ingestion job
+│   ├── batch.tf                 the tpch-batch job: dbt Core through dbt_task
+│   ├── dbt_v2.tf                the dbt-v2-spike job: dbt v2 through a Python task
 │   ├── variables.tf             the knobs you can turn
 │   ├── outputs.tf               values Terraform hands back (e.g. the dbt http_path)
 │   ├── providers.tf             how Terraform authenticates to Databricks
@@ -45,19 +46,19 @@ lakehouse-iac/
 │   ├── macros/                  reusable Jinja; here, the schema-naming override
 │   └── models/
 │       ├── staging/             one view per source table
-│       ├── streaming/           the Auto Loader streaming table
 │       └── marts/               the business-facing tables
 │
-├── ingest/                   ← Python. The only part dbt cannot do.
-│   └── wikipedia_stream.py      holds the SSE connection open, lands JSON files
+├── jobs/                     ← Python. Entry points that run inside Databricks jobs.
+│   └── run_dbt_v2.py            runs dbt v2 where dbt_task cannot
 │
 ├── scripts/                  ← Operational glue.
-│   ├── install-tools.sh         downloads terraform + databricks CLI + dbt into the repo
+│   ├── install-tools.sh         downloads the pinned CLIs and dbt into the repo
 │   ├── env.sh                   puts them on PATH and sets connection env vars
+│   ├── publish-docs.sh          generates the dbt docs site and publishes it
 │   └── uc-catalog.sh            creates/drops the catalog over SQL (see §7)
 │
 ├── .bin/                     ← terraform + databricks binaries      (gitignored)
-├── .venv/                    ← dbt                                  (gitignored)
+└── .venv/                    ← dbt                                  (gitignored)
 ```
 
 ---
@@ -227,6 +228,10 @@ recreating it. On a schema, that takes the tables with it.
 
 ## 6. How to run it
 
+The supported way to run dbt is a Databricks job: this machine edits code, runs
+Terraform, and calls the Databricks CLI. The local `dbt` commands below still
+work, but nothing in the workflow depends on them.
+
 ### First time on a new machine
 
 ```bash
@@ -359,14 +364,15 @@ managed by the Databricks CLI. `terraform.tfvars` and `.env` are gitignored;
 
 ## 9. Current state
 
-Provisioned and verified against the live workspace.
+Provisioned and verified against the live workspace, on the branch
+`feat/dbt-v2-sail-spike`.
 
-**Terraform** — catalog `dev_lakehouse`; schemas `raw`, `staging`, `marts`;
-grants; the `landing` volume; and two jobs, `dev-lakehouse-wikipedia-ingest`
-(continuous) and `dev-lakehouse-wikipedia-transform` (every 5 minutes), with
-no dependency between them.
+**Terraform** — catalog `dev_lakehouse`; schemas `staging` and `marts`; grants;
+and two jobs with no trigger, `dev-lakehouse-tpch-batch` (dbt Core through
+`dbt_task`) and `dev-lakehouse-dbt-v2-spike` (dbt v2 through `jobs/run_dbt_v2.py`).
 
-**Batch path** — `dbt build` passes 40/40.
+**Models** — 5 staging views over `samples.tpch`, and three marts. 40 nodes with
+their tests.
 
 | Model | Rows |
 |---|---|
@@ -374,30 +380,27 @@ no dependency between them.
 | `fct_orders` | 7,500,000 |
 | `agg_sales_by_month` | 2,000 |
 
-**Streaming path** — both jobs run end to end on Databricks, independently:
-ingestion clones this repository once and holds the firehose connection open
-indefinitely; transform clones it fresh on every scheduled run and rebuilds
-the models. Verified transform run durations: 254.7 seconds cold (first
-execution, environment not yet warm), 106.5–115.0 seconds warm — five minutes
-between triggers clears both.
+**dbt v2 on Databricks Free Edition** — verified inside a serverless job (aarch64,
+Python 3.12), on environment version 6 with `dbt==2.0.6`: it installs with `pip`
+in about five seconds, authenticates through the driver with the job's own
+token, and builds all 40 nodes. Every row count and whole-row checksum matched
+the dbt Core baseline exactly. One caveat stands: `fct_orders` was rebuilt as an
+incremental merge of three days, not from scratch, so full-refresh parity is
+not proven yet.
 
-| Model | Rows |
-|---|---|
-| `st_wikipedia_edits` | grows continuously |
-| `fct_wikipedia_edits` | grows continuously, merged every transform run |
-| `agg_wikipedia_activity` | grows continuously |
-
-Latency, edit to queryable row, measured against live traffic after the split:
-p50 124 seconds, p90 250 seconds, max observed 313 seconds. An earlier,
-coupled design — one job, ingestion as a task the transform task waited on —
-measured p50 322 seconds and p99 1,758 seconds; its long tail came from
-ingestion sitting completely idle for most of each 15-minute schedule
-interval, a dead zone the always-on design has no equivalent of.
+Timings from that comparison were not controlled — Core ran cold on environment
+version 3, dbt v2 ran warm on version 6 — so no speed claim is made from them.
+A controlled comparison is the next piece of work.
 
 ## 10. Not built yet
 
-- A `prod` environment, to demonstrate dev → prod promotion
-- A remote Terraform state backend — state is currently local
-- Sustained cost of the now-permanent `wikipedia-ingest` job against Free
-  Edition's serverless allowance — pause with `ingest_pause_status = "PAUSED"`
-  if this becomes a concern
+- A larger project (roughly 150 models and 400 tests) over more data, so that a
+  difference between dbt engines is measurable.
+- A controlled dbt Core vs dbt v2 comparison: same code, same environment
+  version, one engine at a time, with the dbt overhead separated from warehouse
+  time.
+- An hourly batch ingestion job, the source being Wikimedia pageviews, pending a
+  check that the domain is reachable from Free Edition serverless.
+- A `prod` environment, to demonstrate dev → prod promotion.
+- A remote Terraform state backend — state is currently local.
+- The Sail spike, paused until the comparison above is done.

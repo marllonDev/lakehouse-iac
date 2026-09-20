@@ -3,12 +3,10 @@
 [![docs](https://img.shields.io/badge/docs-lineage%20graph-1a73e8)](https://marllondev.github.io/lakehouse-iac/)
 [![ci](https://github.com/marllonDev/lakehouse-iac/actions/workflows/ci.yml/badge.svg)](https://github.com/marllonDev/lakehouse-iac/actions/workflows/ci.yml)
 
-A small but complete analytics platform on **Databricks Free Edition**, where the
-platform itself is code: **Terraform** provisions and governs the Unity Catalog
-objects, **dbt** owns every relation inside them, and a real-time firehose feeds
-one of the two data paths end to end — ingestion, transformation, and a
-Databricks job that runs the whole thing on a schedule with no server of its
-own to maintain.
+A small analytics platform on **Databricks Free Edition** where the platform
+itself is code: **Terraform** provisions and governs the Unity Catalog objects
+and the jobs, **dbt** owns every relation inside them, and the dbt builds run on
+Databricks, not on a developer machine.
 
 📖 [SPEC.md](SPEC.md) — what each tool owns and why · [USAGE.md](USAGE.md) — how
 to run and change every folder · [ARCHITECTURE.md](ARCHITECTURE.md) — the system
@@ -20,7 +18,7 @@ tables. Here the line is drawn explicitly:
 
 | Layer | Owner | What it manages |
 |---|---|---|
-| Catalog, schemas, grants | Terraform | The containers and who may read them |
+| Catalog, schemas, grants, jobs | Terraform | The containers, who may read them, and what runs |
 | Tables, views, tests | dbt | The relations inside those containers |
 
 `generate_schema_name` is overridden so dbt writes into the exact schema names
@@ -28,11 +26,8 @@ Terraform created, instead of dbt's default `<target>_<custom>` mangling.
 
 ## What it builds
 
-Two data paths share one platform.
-
-**Batch** — `samples.tpch`, the read-only TPC-H dataset present in every
-Databricks workspace: 750k customers, 7.5M orders, 30M order lines. No
-ingestion pipeline needed here, so this path stays focused on modelling.
+`samples.tpch`, the read-only TPC-H dataset present in every Databricks
+workspace: 750k customers, 7.5M orders, 30M order lines.
 
 ```
 samples.tpch  ──▶  dev_lakehouse.staging  ──▶  dev_lakehouse.marts
@@ -45,36 +40,30 @@ samples.tpch  ──▶  dev_lakehouse.staging  ──▶  dev_lakehouse.marts
 merges on `order_key`, so late-arriving order lines are picked up without
 rebuilding 7.5M rows.
 
-**Streaming** — the public [Wikimedia EventStreams](https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams)
-firehose: every edit to every Wikipedia, as it happens.
+## dbt Core and dbt v2, on Databricks
 
-```
-stream.wikimedia.org  ──▶  raw.landing  ──▶  staging  ──▶  marts
-   (SSE firehose)         (volume,      (Auto Loader     fct_wikipedia_edits
-                        JSON files)     streaming table)  agg_wikipedia_activity
-```
+There are two jobs, both started by hand, running the same project:
 
-Two independent Databricks jobs, not one: an always-on job holds the firehose
-connection open and writes files forever, and a separately scheduled job
-rebuilds the models every 5 minutes. They used to be one job with the second
-task gated behind the first — which meant an always-on ingest task could never
-hand off, since it never finishes. Splitting them removed that coupling. Both
-jobs and everything upstream of them are provisioned by Terraform; each clones
-this repository at run time, so the code running in production and the code in
-this repository are never able to drift apart.
+| Job | Engine | How |
+|---|---|---|
+| `tpch-batch` | dbt Core 1.12 + `dbt-databricks` | the native `dbt_task` |
+| `dbt-v2-spike` | dbt v2 (`dbt==2.0.6`) | a Python task, `jobs/run_dbt_v2.py` |
 
-Measured against the live workspace after the split: median latency from edit
-to queryable row is **124 seconds**, p90 is 250 seconds, and the worst case
-observed is 313 seconds — down from a 322-second median and a 1,758-second p99
-under the coupled design, whose long tail came from ingestion sitting
-completely idle between scheduled windows. `fct_wikipedia_edits` carries its
-own pipeline latency as a column (`ingestion_lag_seconds`), so these are
-numbers you can query yourself, not a claim in this README.
+The native `dbt_task` supports only dbt Core, so dbt v2 needs its own runner. It
+authenticates with the job's own identity, so there is no personal access token
+and no secret in any file. Verified on Free Edition serverless, environment
+version 6: dbt v2 builds all 40 nodes, and every row count and whole-row checksum
+matches the dbt Core baseline exactly.
+
+No speed claim is made yet. The first timings compared a cold Core run with a
+warm dbt v2 run, which says nothing about the engines. A controlled comparison,
+over a project large enough for the difference to show, is the next piece of
+work; see [SPEC.md](SPEC.md) §10.
 
 ## Running it
 
-Everything is installed inside the repository. The only prerequisite on the
-machine is [uv](https://docs.astral.sh/uv/).
+Everything the local machine needs is installed inside the repository. The only
+prerequisite is [uv](https://docs.astral.sh/uv/).
 
 ```bash
 bash scripts/install-tools.sh      # terraform + databricks CLI into .bin, dbt into .venv
@@ -84,24 +73,11 @@ databricks auth login --host https://<your-workspace>.cloud.databricks.com --pro
 terraform -chdir=infra init
 terraform -chdir=infra apply -var environment=dev
 
-cd transform && dbt deps && dbt build
-```
-
-That builds the batch path. The two streaming jobs start on their own once
-`apply` has created them — ingestion immediately, the transform job on its next
-5-minute tick; to see the transform job run right away rather than wait:
-
-```bash
-databricks jobs run-now --job-id "$(terraform -chdir=infra output -raw wikipedia_transform_job_id)"
+databricks jobs run-now "$(terraform -chdir=infra output -raw tpch_batch_job_id)"
 ```
 
 Both jobs clone this repository over `git_source`, so Databricks needs a Git
 credential linked the first time — see [USAGE.md](USAGE.md#the-job-and-why-it-needs-github).
-To stop the ingestion job from running between demos without deleting it:
-
-```bash
-terraform -chdir=infra apply -var environment=dev -var ingest_pause_status=PAUSED
-```
 
 Working on this repo with an AI assistant is optional and not part of the
 pipeline. Databricks agent skills are installed once per machine, not per
@@ -139,9 +115,9 @@ pretending an unavailable API works.
 ## Layout
 
 ```
-infra/          Terraform: catalog, schemas, grants, volume, warehouse lookup, job
-transform/      dbt project: sources, staging views, streaming table, marts, tests
-ingest/         the one part dbt cannot do — holds the SSE connection open
+infra/          Terraform: catalog, schemas, grants, warehouse lookup, the two jobs
+transform/      dbt project: sources, staging views, marts, tests
+jobs/           Python entry points that run inside Databricks jobs
 scripts/        tool installation, environment, catalog bootstrap, docs publish
 .github/        CI: format, validate, dbt parse
 ```
