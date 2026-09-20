@@ -15,8 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import models_tpcds  # noqa: E402
+import models_wanderbricks  # noqa: E402
 
-MODULES = {"tpcds": models_tpcds}
+MODULES = {"tpcds": models_tpcds, "wanderbricks": models_wanderbricks}
 
 if __name__ == "__main__":
     counts = {name: module.generate() for name, module in MODULES.items()}
