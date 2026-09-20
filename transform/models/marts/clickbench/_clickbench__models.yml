@@ -1,0 +1,152 @@
+version: 2
+
+models:
+  - name: fct_hits_daily
+    description: >
+      One row per site and day.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - event_date
+                - counter_id
+    columns:
+      - name: event_date
+        data_tests:
+          - not_null
+      - name: counter_id
+        data_tests:
+          - not_null
+      - name: events
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+
+  - name: agg_hits_top_search_phrases
+    description: >
+      The thousand most searched phrases.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - search_phrase
+    columns:
+      - name: search_phrase
+        data_tests:
+          - not_null
+
+  - name: agg_hits_by_region
+    description: >
+      Traffic, audience and mobile share of each region.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - region_id
+    columns:
+      - name: region_id
+        data_tests:
+          - not_null
+      - name: mobile_share
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+
+  - name: agg_hits_by_engine
+    description: >
+      Traffic that came from each search engine and advertising engine.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - search_engine_id
+                - adv_engine_id
+    columns:
+      - name: search_engine_id
+        data_tests:
+          - not_null
+      - name: adv_engine_id
+        data_tests:
+          - not_null
+
+  - name: agg_hits_devices
+    description: >
+      Traffic by the kind of device and operating system.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - is_mobile_device
+                - mobile_phone_model
+                - os_id
+    columns:
+      - name: is_mobile_device
+        data_tests:
+          - not_null
+
+  - name: agg_hits_top_hosts
+    description: >
+      The thousand busiest hosts and how many visitors stayed.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - url_host
+    columns:
+      - name: url_host
+        data_tests:
+          - not_null
+      - name: engaged_share
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+
+  - name: agg_hits_hourly_traffic
+    description: >
+      Events and visitors for each hour of each day.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - event_date
+                - event_hour
+    columns:
+      - name: event_date
+        data_tests:
+          - not_null
+      - name: event_hour
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 23
+                inclusive: true
+
+  - name: agg_hits_traffic_sources
+    description: >
+      Where the traffic came from and whether it stayed.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - traffic_source_id
+    columns:
+      - name: traffic_source_id
+        data_tests:
+          - not_null
+      - name: engaged_share
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true

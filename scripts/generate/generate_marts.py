@@ -16,8 +16,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import models_tpcds  # noqa: E402
 import models_wanderbricks  # noqa: E402
+import models_tpch  # noqa: E402
+import models_clickbench  # noqa: E402
 
-MODULES = {"tpcds": models_tpcds, "wanderbricks": models_wanderbricks}
+MODULES = {"tpcds": models_tpcds, "wanderbricks": models_wanderbricks, "tpch": models_tpch, "clickbench": models_clickbench}
 
 if __name__ == "__main__":
     counts = {name: module.generate() for name, module in MODULES.items()}
