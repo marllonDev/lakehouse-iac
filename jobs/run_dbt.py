@@ -115,16 +115,21 @@ def warehouse_report(workspace, warehouse_id, started_ms, ended_ms):
     """What the warehouse did in the window: statement count, time, and time it sat idle."""
     from databricks.sdk.service.sql import QueryFilter, TimeRange
 
-    queries = list(
-        workspace.query_history.list(
+    queries, page_token = [], None
+    while True:
+        page = workspace.query_history.list(
             filter_by=QueryFilter(
                 warehouse_ids=[warehouse_id],
                 query_start_time_range=TimeRange(start_time_ms=started_ms, end_time_ms=ended_ms),
             ),
             include_metrics=True,
-            max_results=1000,
+            max_results=500,
+            page_token=page_token,
         )
-    )
+        queries += page.res or []
+        page_token = page.next_page_token
+        if not page.has_next_page or not page_token:
+            break
     spans = sorted(
         (q.query_start_time_ms, q.query_end_time_ms) for q in queries if q.query_start_time_ms and q.query_end_time_ms
     )
