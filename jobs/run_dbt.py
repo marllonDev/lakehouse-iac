@@ -45,8 +45,8 @@ lakehouse:
 {auth}      threads: {threads}
 """
 
-# dbt v2 accepts only oauth or token here; dbt Core takes a token from the token
-# key alone and rejects an explicit auth_type of "token".
+# dbt v2 accepts only oauth or token for auth_type, so it has to be spelled out.
+# dbt Core takes the token from the token key alone.
 AUTH = {
     "v2": '      auth_type: token\n      token: "{{ env_var(\'DBT_DATABRICKS_TOKEN\') }}"\n',
     "core": '      token: "{{ env_var(\'DBT_DATABRICKS_TOKEN\') }}"\n',
