@@ -397,8 +397,7 @@ managed by the Databricks CLI. `terraform.tfvars` and `.env` are gitignored;
 
 ## 9. Current state
 
-Provisioned and verified against the live workspace, on the branch
-`feat/dbt-v2-sail-spike`.
+Provisioned and verified against the live workspace. Every job clones `main`.
 
 **Terraform** — catalog `dev_lakehouse`; schemas `staging` and `marts`; grants;
 and three jobs with no trigger: `dev-lakehouse-tpch-batch` (dbt Core through

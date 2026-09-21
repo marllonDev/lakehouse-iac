@@ -91,7 +91,7 @@ Almost everything is a variable. To change behaviour, edit the `default` in
 | `sql_warehouse_name` | `Serverless Starter Warehouse` | Which warehouse to look up and hand to dbt. |
 | `databricks_profile` | `FREE` | Which CLI profile the catalog bootstrap authenticates with. |
 | `git_repo_url` | this repo | Where the job clones the dbt project from at run time. |
-| `git_branch` | `feat/dbt-v2-sail-spike` | Branch **every** job clones. One variable on purpose: a Core vs v2 comparison only means something on identical code. |
+| `git_branch` | `main` | Branch **every** job clones. One variable on purpose: a Core vs v2 comparison only means something on identical code. |
 | `dbt_databricks_version` | `1.12.4` | Adapter the Core jobs (`tpch-batch`, `dbt-core`) install into their serverless environment. |
 | `dbt_v2_package` | `dbt` | dbt v2 distribution the `dbt-v2` job installs: `dbt` (dbt Labs licence) or `dbt-oss` (Apache-2.0). |
 | `dbt_v2_version` | `2.0.6` | Exact version of that distribution. Never a range: the package fetches binaries when pip builds it. |
