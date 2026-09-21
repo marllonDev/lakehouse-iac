@@ -220,8 +220,7 @@ Short-form ADRs — the choice, and the alternative it beat.
 
 ## 8. Current inventory
 
-Everything below exists in the live workspace, on the branch
-`feat/dbt-v2-sail-spike`.
+Everything below exists in the live workspace, and every job clones `main`.
 
 | | |
 |---|---|
