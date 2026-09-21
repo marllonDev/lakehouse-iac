@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: clickbench
+    description: >
+      ClickBench's hits table, about 100 million web analytics events with 105
+      columns, shipped in the Databricks samples.
+    catalog: samples
+    schema: clickbench
+
+    tables:
+      - name: hits

@@ -1,0 +1,8 @@
+ship_mode,sla_days
+AIR,3
+FOB,5
+MAIL,6
+RAIL,5
+REG AIR,3
+SHIP,7
+TRUCK,4

@@ -1,0 +1,36 @@
+snapshots:
+  - name: snap_wb_hosts
+    description: >
+      The history of each host: a new row starts whenever their verification, activity
+      or rating changes.
+    relation: ref('stg_wanderbricks__hosts')
+    config:
+      schema: marts
+      unique_key: host_id
+      strategy: check
+      check_cols: [is_verified, is_active, rating]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [host_id, dbt_valid_from]
+    columns:
+      - name: host_id
+        data_tests: [not_null]
+
+  - name: snap_wb_properties
+    description: >
+      The history of each property: a new row starts whenever its price, type or
+      bedroom count changes.
+    relation: ref('stg_wanderbricks__properties')
+    config:
+      schema: marts
+      unique_key: property_id
+      strategy: check
+      check_cols: [base_price, property_type, bedrooms]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [property_id, dbt_valid_from]
+    columns:
+      - name: property_id
+        data_tests: [not_null]

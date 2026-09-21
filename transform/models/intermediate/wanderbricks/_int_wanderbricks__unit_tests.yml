@@ -1,0 +1,15 @@
+version: 2
+
+unit_tests:
+  - name: test_a_gap_over_thirty_minutes_starts_a_new_session
+    model: int_wb__sessions
+    given:
+      - input: ref('int_wb__user_events')
+        rows:
+          - {event_type: page_view, user_id: 1, property_id: 10, event_at: "2024-01-01 10:00:00"}
+          - {event_type: search, user_id: 1, property_id: 11, event_at: "2024-01-01 10:10:00"}
+          - {event_type: page_view, user_id: 1, property_id: 10, event_at: "2024-01-01 11:00:00"}
+    expect:
+      rows:
+        - {user_id: 1, session_number: 1, events: 2, properties_seen: 2, searches: 1}
+        - {user_id: 1, session_number: 2, events: 1, properties_seen: 1, searches: 0}

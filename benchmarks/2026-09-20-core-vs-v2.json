@@ -1,0 +1,160 @@
+{
+ "date": "2026-09-20",
+ "note": "Serverless environment v6, threads 8, same commit, same warehouse, one job at a time. Order: warm-up core, then v2 core core v2 v2 core.",
+ "runs": [
+  {
+   "label": "run1_v2",
+   "engine": "v2",
+   "counted": true,
+   "job_run_id": 651636369928518,
+   "job_seconds": 284.421,
+   "env_setup_seconds": 4.0,
+   "deps_seconds": 0.5,
+   "parse_cold_seconds": 1.0,
+   "parse_repeat_seconds": 1.0,
+   "compile_seconds": 2.4,
+   "build_seconds": 213.7,
+   "warehouse_busy_seconds": 212.2,
+   "warehouse_statements": 863,
+   "nodes": 553,
+   "nodes_by_status": {
+    "success": 151,
+    "pass": 397,
+    "warn": 5
+   },
+   "node_digest": "5acc36b847aa0c44"
+  },
+  {
+   "label": "run2_core",
+   "engine": "core",
+   "counted": true,
+   "job_run_id": 49885958322833,
+   "job_seconds": 341.606,
+   "env_setup_seconds": 4.0,
+   "deps_seconds": 3.9,
+   "parse_cold_seconds": 11.1,
+   "parse_repeat_seconds": 6.5,
+   "compile_seconds": 16.6,
+   "build_seconds": 226.7,
+   "warehouse_busy_seconds": 212.9,
+   "warehouse_statements": 709,
+   "nodes": 553,
+   "nodes_by_status": {
+    "success": 151,
+    "pass": 397,
+    "warn": 5
+   },
+   "node_digest": "5acc36b847aa0c44"
+  },
+  {
+   "label": "run3_core",
+   "engine": "core",
+   "counted": true,
+   "job_run_id": 650412836598757,
+   "job_seconds": 335.123,
+   "env_setup_seconds": 4.0,
+   "deps_seconds": 3.6,
+   "parse_cold_seconds": 10.1,
+   "parse_repeat_seconds": 5.8,
+   "compile_seconds": 15.3,
+   "build_seconds": 232.0,
+   "warehouse_busy_seconds": 219.1,
+   "warehouse_statements": 705,
+   "nodes": 553,
+   "nodes_by_status": {
+    "success": 151,
+    "pass": 397,
+    "warn": 5
+   },
+   "node_digest": "5acc36b847aa0c44"
+  },
+  {
+   "label": "run4_v2",
+   "engine": "v2",
+   "counted": true,
+   "job_run_id": 983735222633187,
+   "job_seconds": 296.357,
+   "env_setup_seconds": 4.0,
+   "deps_seconds": 0.4,
+   "parse_cold_seconds": 1.1,
+   "parse_repeat_seconds": 1.1,
+   "compile_seconds": 2.7,
+   "build_seconds": 218.5,
+   "warehouse_busy_seconds": 216.8,
+   "warehouse_statements": 863,
+   "nodes": 553,
+   "nodes_by_status": {
+    "success": 151,
+    "pass": 397,
+    "warn": 5
+   },
+   "node_digest": "5acc36b847aa0c44"
+  },
+  {
+   "label": "run5_v2",
+   "engine": "v2",
+   "counted": true,
+   "job_run_id": 453614181771374,
+   "job_seconds": 280.684,
+   "env_setup_seconds": 4.0,
+   "deps_seconds": 0.4,
+   "parse_cold_seconds": 1.0,
+   "parse_repeat_seconds": 1.0,
+   "compile_seconds": 2.5,
+   "build_seconds": 210.5,
+   "warehouse_busy_seconds": 209.1,
+   "warehouse_statements": 863,
+   "nodes": 553,
+   "nodes_by_status": {
+    "success": 151,
+    "pass": 397,
+    "warn": 5
+   },
+   "node_digest": "5acc36b847aa0c44"
+  },
+  {
+   "label": "run6_core",
+   "engine": "core",
+   "counted": true,
+   "job_run_id": 839457379061664,
+   "job_seconds": 357.101,
+   "env_setup_seconds": 4.0,
+   "deps_seconds": 4.0,
+   "parse_cold_seconds": 10.9,
+   "parse_repeat_seconds": 6.5,
+   "compile_seconds": 16.1,
+   "build_seconds": 235.2,
+   "warehouse_busy_seconds": 217.6,
+   "warehouse_statements": 705,
+   "nodes": 553,
+   "nodes_by_status": {
+    "success": 151,
+    "pass": 397,
+    "warn": 5
+   },
+   "node_digest": "5acc36b847aa0c44"
+  },
+  {
+   "label": "warmup_core",
+   "engine": "core",
+   "counted": false,
+   "job_run_id": 676384130617098,
+   "job_seconds": 334.064,
+   "env_setup_seconds": 4.0,
+   "deps_seconds": 4.1,
+   "parse_cold_seconds": 11.0,
+   "parse_repeat_seconds": 6.5,
+   "compile_seconds": 16.7,
+   "build_seconds": 221.4,
+   "warehouse_busy_seconds": 205.3,
+   "warehouse_statements": 705,
+   "nodes": 553,
+   "nodes_by_status": {
+    "success": 151,
+    "pass": 397,
+    "warn": 5
+   },
+   "node_digest": "5acc36b847aa0c44"
+  }
+ ]
+}

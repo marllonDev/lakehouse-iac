@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: int_hits__events
+    description: >
+      Page views that were not refreshes, with the flags spelled as booleans and the host of the page pulled out.
+
+  - name: int_hits__daily_users
+    description: >
+      Events, visitors and searches of each site on each day.

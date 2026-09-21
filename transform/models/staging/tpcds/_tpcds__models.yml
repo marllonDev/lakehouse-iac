@@ -1,0 +1,205 @@
+version: 2
+
+models:
+  - name: stg_tpcds__call_center
+    description: One row per call center row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: call_center_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__catalog_page
+    description: One row per catalog page row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: catalog_page_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__catalog_returns
+    description: One row per catalog returns row in samples.tpcds_sf1, columns renamed without the table prefix.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+                - order_number
+    columns:
+      - name: item_sk
+        data_tests: [not_null]
+      - name: order_number
+        data_tests: [not_null]
+
+  - name: stg_tpcds__catalog_sales
+    description: One row per catalog sales row in samples.tpcds_sf1, columns renamed without the table prefix.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+                - order_number
+    columns:
+      - name: item_sk
+        data_tests: [not_null]
+      - name: order_number
+        data_tests: [not_null]
+
+  - name: stg_tpcds__customer
+    description: One row per customer row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: customer_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__customer_address
+    description: One row per customer address row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: address_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__customer_demographics
+    description: One row per customer demographics row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: demo_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__date_dim
+    description: One row per date dim row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: date_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__household_demographics
+    description: One row per household demographics row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: demo_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__income_band
+    description: One row per income band row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: income_band_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__inventory
+    description: One row per inventory row in samples.tpcds_sf1, columns renamed without the table prefix.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - date_sk
+                - item_sk
+                - warehouse_sk
+    columns:
+      - name: date_sk
+        data_tests: [not_null]
+      - name: item_sk
+        data_tests: [not_null]
+      - name: warehouse_sk
+        data_tests: [not_null]
+
+  - name: stg_tpcds__item
+    description: One row per item row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: item_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__promotion
+    description: One row per promotion row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: promo_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__reason
+    description: One row per reason row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: reason_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__ship_mode
+    description: One row per ship mode row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: ship_mode_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__store
+    description: One row per store row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: store_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__store_returns
+    description: One row per store returns row in samples.tpcds_sf1, columns renamed without the table prefix.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+                - ticket_number
+    columns:
+      - name: item_sk
+        data_tests: [not_null]
+      - name: ticket_number
+        data_tests: [not_null]
+
+  - name: stg_tpcds__store_sales
+    description: One row per store sales row in samples.tpcds_sf1, columns renamed without the table prefix.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+                - ticket_number
+    columns:
+      - name: item_sk
+        data_tests: [not_null]
+      - name: ticket_number
+        data_tests: [not_null]
+
+  - name: stg_tpcds__time_dim
+    description: One row per time dim row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: time_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__warehouse
+    description: One row per warehouse row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: warehouse_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__web_page
+    description: One row per web page row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: web_page_sk
+        data_tests: [unique, not_null]
+
+  - name: stg_tpcds__web_returns
+    description: One row per web returns row in samples.tpcds_sf1, columns renamed without the table prefix.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+                - order_number
+    columns:
+      - name: item_sk
+        data_tests: [not_null]
+      - name: order_number
+        data_tests: [not_null]
+
+  - name: stg_tpcds__web_sales
+    description: One row per web sales row in samples.tpcds_sf1, columns renamed without the table prefix.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+                - order_number
+    columns:
+      - name: item_sk
+        data_tests: [not_null]
+      - name: order_number
+        data_tests: [not_null]
+
+  - name: stg_tpcds__web_site
+    description: One row per web site row in samples.tpcds_sf1, columns renamed without the table prefix.
+    columns:
+      - name: site_sk
+        data_tests: [unique, not_null]

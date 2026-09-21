@@ -1,0 +1,583 @@
+version: 2
+
+models:
+  - name: dim_tpcds_customer
+    description: >
+      One row per customer, with a name and an age band derived from the birth year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - customer_sk
+    columns:
+      - name: customer_sk
+        data_tests:
+          - not_null
+      - name: customer_id
+        data_tests:
+          - not_null
+
+  - name: dim_tpcds_item
+    description: >
+      One row per item.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+    columns:
+      - name: item_sk
+        data_tests:
+          - not_null
+      - name: current_price
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+  - name: dim_tpcds_date
+    description: >
+      One row per calendar day.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - date_sk
+    columns:
+      - name: date_sk
+        data_tests:
+          - not_null
+      - name: calendar_date
+        data_tests:
+          - not_null
+      - name: month
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 12
+                inclusive: true
+
+  - name: dim_tpcds_store
+    description: >
+      One row per store.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - store_sk
+    columns:
+      - name: store_sk
+        data_tests:
+          - not_null
+
+  - name: dim_tpcds_warehouse
+    description: >
+      One row per warehouse.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - warehouse_sk
+    columns:
+      - name: warehouse_sk
+        data_tests:
+          - not_null
+
+  - name: dim_tpcds_promotion
+    description: >
+      One row per promotion, with how many marketing channels it used.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - promo_sk
+    columns:
+      - name: promo_sk
+        data_tests:
+          - not_null
+      - name: channels_used
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 6
+                inclusive: true
+
+  - name: fct_tpcds_sales
+    description: >
+      One row per sales line across store, catalog and web.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - channel
+                - order_id
+                - item_sk
+    columns:
+      - name: channel
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [store, catalog, web]
+      - name: order_id
+        data_tests:
+          - not_null
+      - name: item_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tpcds_item')
+                field: item_sk
+      - name: calendar_date
+        data_tests:
+          - not_null
+      - name: sold_date_sk
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_tpcds_date')
+                field: date_sk
+      - name: customer_sk
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_tpcds_customer')
+                field: customer_sk
+      - name: quantity
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+  - name: fct_tpcds_store_sales
+    description: >
+      One row per store sales line.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - ticket_number
+                - item_sk
+    columns:
+      - name: ticket_number
+        data_tests:
+          - not_null
+      - name: item_sk
+        data_tests:
+          - not_null
+      - name: store_sk
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_tpcds_store')
+                field: store_sk
+
+  - name: fct_tpcds_returns
+    description: >
+      One row per returned line across the three channels.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - channel
+                - order_id
+                - item_sk
+    columns:
+      - name: channel
+        data_tests:
+          - not_null
+      - name: order_id
+        data_tests:
+          - not_null
+      - name: item_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tpcds_item')
+                field: item_sk
+
+  - name: fct_tpcds_inventory
+    description: >
+      One row per item, warehouse and week: how much stock was on hand.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - date_sk
+                - item_sk
+                - warehouse_sk
+    columns:
+      - name: date_sk
+        data_tests:
+          - not_null
+      - name: item_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tpcds_item')
+                field: item_sk
+      - name: warehouse_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tpcds_warehouse')
+                field: warehouse_sk
+
+  - name: agg_tpcds_sales_by_month_channel
+    description: >
+      Revenue, profit, units and orders per month and channel, with a running year to date and each channel's share of the month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - year
+                - month
+                - channel
+    columns:
+      - name: year
+        data_tests:
+          - not_null
+      - name: month
+        data_tests:
+          - not_null
+      - name: channel
+        data_tests:
+          - not_null
+      - name: revenue
+        data_tests:
+          - not_null
+      - name: orders
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+  - name: agg_tpcds_sales_by_category_year
+    description: >
+      Revenue and profit per item category and year, ranked within the year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - category
+                - year
+    columns:
+      - name: category
+        data_tests:
+          - not_null
+      - name: year
+        data_tests:
+          - not_null
+      - name: revenue
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_sales_by_state
+    description: >
+      Revenue, customers and orders per customer state and year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - state
+                - year
+    columns:
+      - name: state
+        data_tests:
+          - not_null
+      - name: year
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_top_items_by_year
+    description: >
+      The hundred best-selling items of each year by revenue.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - year
+                - item_sk
+    columns:
+      - name: year
+        data_tests:
+          - not_null
+      - name: item_sk
+        data_tests:
+          - not_null
+      - name: revenue_rank
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 100
+                inclusive: true
+
+  - name: agg_tpcds_yoy_growth
+    description: >
+      Year over year revenue growth per item category.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - category
+                - year
+    columns:
+      - name: category
+        data_tests:
+          - not_null
+      - name: year
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_customer_rfm
+    description: >
+      Recency, frequency and monetary value per customer, each scored one to five.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - customer_sk
+    columns:
+      - name: customer_sk
+        data_tests:
+          - not_null
+      - name: recency_days
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: frequency
+        data_tests:
+          - not_null
+      - name: monetary
+        data_tests:
+          - not_null
+      - name: recency_score
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 5
+                inclusive: true
+
+  - name: agg_tpcds_customer_ltv
+    description: >
+      Lifetime revenue and profit per customer, with where that customer sits in the revenue distribution.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - customer_sk
+    columns:
+      - name: customer_sk
+        data_tests:
+          - not_null
+      - name: revenue
+        data_tests:
+          - not_null
+      - name: revenue_percentile
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+
+  - name: agg_tpcds_return_rate_by_item
+    description: >
+      The share of units sold that came back, per item.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - item_sk
+    columns:
+      - name: item_sk
+        data_tests:
+          - not_null
+      - name: units_sold
+        data_tests:
+          - not_null
+      - name: units_returned
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+  - name: agg_tpcds_store_performance
+    description: >
+      Revenue, profit and revenue per square foot for each store and year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - store_sk
+                - year
+    columns:
+      - name: store_sk
+        data_tests:
+          - not_null
+      - name: year
+        data_tests:
+          - not_null
+      - name: revenue
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_basket_size
+    description: >
+      How many items and how much money a typical order holds, per channel and month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - channel
+                - year
+                - month
+    columns:
+      - name: channel
+        data_tests:
+          - not_null
+      - name: year
+        data_tests:
+          - not_null
+      - name: month
+        data_tests:
+          - not_null
+      - name: orders
+        data_tests:
+          - not_null
+      - name: avg_items
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+
+  - name: agg_tpcds_promo_effectiveness
+    description: >
+      Orders, revenue and the discount rate for each promotion, and for sales with none.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - promo
+    columns:
+      - name: promo
+        data_tests:
+          - not_null
+      - name: revenue
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_price_band_mix
+    description: >
+      Units and revenue by channel and price band.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - channel
+                - price_band
+    columns:
+      - name: channel
+        data_tests:
+          - not_null
+      - name: price_band
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_demographic_spend
+    description: >
+      Spending by gender, marital status, education and year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - gender
+                - marital_status
+                - education_status
+                - year
+    columns:
+      - name: gender
+        data_tests:
+          - not_null
+      - name: year
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_weekday_pattern
+    description: >
+      Orders and revenue by channel and day of the week.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - channel
+                - day_name
+    columns:
+      - name: channel
+        data_tests:
+          - not_null
+      - name: day_name
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_inventory_turnover
+    description: >
+      How many times the average stock was sold, per category and month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - year
+                - month
+                - category
+    columns:
+      - name: year
+        data_tests:
+          - not_null
+      - name: month
+        data_tests:
+          - not_null
+      - name: category
+        data_tests:
+          - not_null
+
+  - name: agg_tpcds_cohort_retention
+    description: >
+      For customers grouped by the month of their first purchase, how many bought again in each later month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - cohort_index
+                - months_since_first
+    columns:
+      - name: cohort_index
+        data_tests:
+          - not_null
+      - name: months_since_first
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true

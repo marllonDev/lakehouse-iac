@@ -1,0 +1,40 @@
+version: 2
+
+seeds:
+  - name: seed_ship_mode_sla
+    description: >
+      The days each TPC-H shipping mode promises between the order and the shipment.
+      Invented for this project.
+    columns:
+      - name: ship_mode
+        data_tests: [unique, not_null]
+      - name: sla_days
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+
+  - name: seed_wb_payment_methods
+    description: >
+      The processing fee and speed of each payment method on the rental marketplace.
+      Invented for this project.
+    columns:
+      - name: payment_method
+        data_tests: [unique, not_null]
+      - name: fee_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 0.1
+
+  - name: seed_tpch_priority_weights
+    description: >
+      How much each TPC-H order priority counts when orders are weighted by urgency.
+      Invented for this project.
+    columns:
+      - name: order_priority
+        data_tests: [unique, not_null]
+      - name: priority_weight
+        data_tests: [not_null]

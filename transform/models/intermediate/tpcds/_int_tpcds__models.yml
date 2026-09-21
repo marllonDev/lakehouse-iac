@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: int_tpcds__calendar
+    description: >
+      The TPC-DS date dimension with readable names and boolean flags.
+
+  - name: int_tpcds__item_hierarchy
+    description: >
+      Items with their category, class and brand, and the margin between price and cost.
+
+  - name: int_tpcds__customer_profile
+    description: >
+      A customer with the address, demographics, household and income band joined in.
+
+  - name: int_tpcds__store_dim
+    description: >
+      Stores with their geography and size.
+
+  - name: int_tpcds__store_sales_lines
+    description: >
+      Store sales lines in the shape shared by every channel.
+
+  - name: int_tpcds__catalog_sales_lines
+    description: >
+      Catalog sales lines in the shape shared by every channel.
+
+  - name: int_tpcds__web_sales_lines
+    description: >
+      Web sales lines in the shape shared by every channel.
+
+  - name: int_tpcds__sales_all_channels
+    description: >
+      Every sales line from the three channels, one shape, one row per line.
+
+  - name: int_tpcds__returns_all_channels
+    description: >
+      Every return from the three channels in one shape.
+
+  - name: int_tpcds__inventory_snapshots
+    description: >
+      Weekly inventory levels with the calendar date and item category attached.

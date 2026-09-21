@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: wanderbricks
+    description: >
+      A short-term rental marketplace shipped in the Databricks samples:
+      bookings, payments, reviews, clickstream and support tickets.
+    catalog: samples
+    schema: wanderbricks
+
+    tables:
+      - name: amenities
+      - name: booking_updates
+      - name: bookings
+      - name: clickstream
+      - name: countries
+      - name: customer_support_logs
+      - name: destinations
+      - name: employees
+      - name: hosts
+      - name: page_views
+      - name: payments
+      - name: properties
+      - name: property_amenities
+      - name: property_images
+      - name: reviews
+      - name: users

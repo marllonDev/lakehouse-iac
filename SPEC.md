@@ -30,9 +30,10 @@ one would drop what the other created, and the state would drift.
 
 ```
 lakehouse-iac/
-├── infra/                    ← Terraform. The containers.
+├── infra/                    ← Terraform. The containers and the jobs.
 │   ├── main.tf                  catalog, schemas, grants, warehouse lookup
-│   ├── streaming.tf             landing volume and the Wikimedia ingestion job
+│   ├── batch.tf                 the tpch-batch job: dbt Core through dbt_task
+│   ├── bench.tf                 the dbt-core and dbt-v2 jobs: one runner, two engines
 │   ├── variables.tf             the knobs you can turn
 │   ├── outputs.tf               values Terraform hands back (e.g. the dbt http_path)
 │   ├── providers.tf             how Terraform authenticates to Databricks
@@ -42,37 +43,60 @@ lakehouse-iac/
 │   ├── dbt_project.yml          project config: which folder becomes which schema
 │   ├── profiles.yml             connection settings (no secrets)
 │   ├── packages.yml             third-party dbt packages (dbt_utils)
-│   ├── macros/                  reusable Jinja; here, the schema-naming override
+│   ├── macros/                  reusable Jinja: the schema-naming override, safe_divide
+│   ├── seeds/                   small reference tables, as CSV
+│   ├── snapshots/               history of hosts and properties
+│   ├── tests/                   singular tests: SQL that must return no rows
 │   └── models/
-│       ├── staging/             one view per source table
-│       ├── streaming/           the Auto Loader streaming table
+│       ├── staging/             one view per source table, by dataset
+│       ├── intermediate/        joins and reshaping shared by several marts
 │       └── marts/               the business-facing tables
 │
-├── ingest/                   ← Python. The only part dbt cannot do.
-│   └── wikipedia_stream.py      holds the SSE connection open, lands JSON files
+├── jobs/                     ← Python. Entry points that run inside Databricks jobs.
+│   └── run_dbt.py               runs dbt, either engine, where dbt_task cannot
+│
+├── benchmarks/               ← Raw numbers of the dbt Core vs dbt v2 comparison.
 │
 ├── scripts/                  ← Operational glue.
-│   ├── install-tools.sh         downloads terraform + databricks CLI + dbt into the repo
+│   ├── generate/                writes the staging, intermediate and mart models
+│   ├── install-tools.sh         downloads the pinned CLIs and dbt into the repo
 │   ├── env.sh                   puts them on PATH and sets connection env vars
+│   ├── publish-docs.sh          generates the dbt docs site and publishes it
 │   └── uc-catalog.sh            creates/drops the catalog over SQL (see §7)
 │
 ├── .bin/                     ← terraform + databricks binaries      (gitignored)
-├── .venv/                    ← dbt                                  (gitignored)
+└── .venv/                    ← dbt                                  (gitignored)
 ```
 
 ---
 
 ## 3. What the data is, and where it comes from
 
-The source is **`samples.tpch`** — a read-only dataset that Databricks ships
-inside every workspace. Nothing is ingested; nothing is downloaded. It is
-already sitting in the `samples` catalog when the workspace is created.
+The sources are four read-only datasets that Databricks ships inside every
+workspace. Nothing is ingested; nothing is downloaded. They are already sitting
+in the `samples` catalog when the workspace is created.
+
+| Dataset | Schema | What it is | Size |
+|---|---|---|---|
+| TPC-H | `samples.tpch` | A wholesale supplier | 30M order lines |
+| TPC-DS | `samples.tpcds_sf1` | A retail star schema with store, catalog and web sales | 24 tables, 11.7M inventory rows |
+| Wanderbricks | `samples.wanderbricks` | A short-term rental marketplace | 16 tables, 500k page views |
+| ClickBench | `samples.clickbench` | Web analytics events | 100M rows in one table |
+
+TPC-H was the whole project at first. The others were added so that the project
+is large enough for a difference between dbt engines to show, and varied enough
+not to favour one kind of model. TPC-DS is clean generated data; Wanderbricks is
+closer to real data: several tables repeat their id, refunds are negative, and
+some relationships do not hold. Its tests report those as warnings instead of
+failing the build.
+
+The rest of this section describes TPC-H, the dataset the original marts use.
 
 TPC-H is a standard benchmark dataset that models a **wholesale supplier**:
 customers place orders, each order has line items, each line item references a
 part and a supplier, and customers belong to nations which belong to regions.
 
-The five source tables used here:
+The five source tables the original marts use:
 
 | Table | Rows | Grain (what one row means) |
 |---|---|---|
@@ -115,7 +139,7 @@ The three things dbt adds on top of plain SQL:
 3. **Materialisation is a config, not a rewrite.** Changing a model from a view
    to an incremental table is one line; the SQL does not change.
 
-### The two layers in this project
+### The layers in this project
 
 **`models/staging/`** — one view per source table. Materialised as **views**, so
 they cost nothing to store and always reflect the source.
@@ -129,8 +153,18 @@ Their only job is to make the raw data usable:
 No joins, no business logic, no aggregation. One staging model per source table,
 always.
 
+**`models/intermediate/`** — joins and reshaping that more than one mart needs,
+such as a booking with its property and guest attached, or a click stream cut
+into sessions. Materialised as **views** in the `staging` schema: they are real
+relations, so the lineage graph shows them, without a third schema to provision.
+
 **`models/marts/`** — the business-facing layer. Materialised as **tables**,
 because they are queried repeatedly and joins are expensive.
+
+Beyond those, the project has three seeds (small reference tables as CSV), two
+snapshots (the history of hosts and properties), a `safe_divide` macro, eleven
+singular tests that reconcile one layer against another, and four unit tests
+that pin the trickier transformations against fixed input.
 
 ### What a "mart" is
 
@@ -143,7 +177,7 @@ Concretely: to ask "revenue by region" against the raw data you must join
 `orders → customer → nation → region` and know all four key columns. Against
 `dim_customers`, `region_name` is simply a column.
 
-The three marts here follow standard dimensional modelling:
+The three original marts follow standard dimensional modelling:
 
 | Model | Type | Grain | What it is |
 |---|---|---|---|
@@ -226,6 +260,10 @@ recreating it. On a schema, that takes the tables with it.
 ---
 
 ## 6. How to run it
+
+The supported way to run dbt is a Databricks job: this machine edits code, runs
+Terraform, and calls the Databricks CLI. The local `dbt` commands below still
+work, but nothing in the workflow depends on them.
 
 ### First time on a new machine
 
@@ -359,45 +397,42 @@ managed by the Databricks CLI. `terraform.tfvars` and `.env` are gitignored;
 
 ## 9. Current state
 
-Provisioned and verified against the live workspace.
+Provisioned and verified against the live workspace, on the branch
+`feat/dbt-v2-sail-spike`.
 
-**Terraform** — catalog `dev_lakehouse`; schemas `raw`, `staging`, `marts`;
-grants; the `landing` volume; and two jobs, `dev-lakehouse-wikipedia-ingest`
-(continuous) and `dev-lakehouse-wikipedia-transform` (every 5 minutes), with
-no dependency between them.
+**Terraform** — catalog `dev_lakehouse`; schemas `staging` and `marts`; grants;
+and three jobs with no trigger: `dev-lakehouse-tpch-batch` (dbt Core through
+`dbt_task`), and `dev-lakehouse-dbt-core` and `dev-lakehouse-dbt-v2` (each engine
+through `jobs/run_dbt.py`). Every dbt job runs on serverless environment version 6.
 
-**Batch path** — `dbt build` passes 40/40.
+**The project** — 146 models (49 staging, 25 intermediate, 72 marts), 3 seeds,
+2 snapshots, 398 data tests and 4 unit tests: 553 nodes per `dbt build`, building
+151 relations over four sample datasets, the largest 100 million rows. A full
+build takes about four minutes.
 
-| Model | Rows |
-|---|---|
-| `dim_customers` | 750,000 |
-| `fct_orders` | 7,500,000 |
-| `agg_sales_by_month` | 2,000 |
+**dbt Core against dbt v2** — compared on identical code, environment, runner,
+warehouse and thread count, one job at a time, six alternating runs after a
+warm-up. Both engines touch the same 553 nodes with the same results, and 147 of
+151 relations carry identical checksums; the other four are non-deterministic
+under either engine. dbt v2 parses about eleven times and compiles about six
+times faster. The build, which waits on the warehouse, is 8% faster. See
+[BENCHMARK.md](BENCHMARK.md).
 
-**Streaming path** — both jobs run end to end on Databricks, independently:
-ingestion clones this repository once and holds the firehose connection open
-indefinitely; transform clones it fresh on every scheduled run and rebuilds
-the models. Verified transform run durations: 254.7 seconds cold (first
-execution, environment not yet warm), 106.5–115.0 seconds warm — five minutes
-between triggers clears both.
-
-| Model | Rows |
-|---|---|
-| `st_wikipedia_edits` | grows continuously |
-| `fct_wikipedia_edits` | grows continuously, merged every transform run |
-| `agg_wikipedia_activity` | grows continuously |
-
-Latency, edit to queryable row, measured against live traffic after the split:
-p50 124 seconds, p90 250 seconds, max observed 313 seconds. An earlier,
-coupled design — one job, ingestion as a task the transform task waited on —
-measured p50 322 seconds and p99 1,758 seconds; its long tail came from
-ingestion sitting completely idle for most of each 15-minute schedule
-interval, a dead zone the always-on design has no equivalent of.
+**dbt v2 on Databricks Free Edition** — it installs with `pip` in seconds inside
+a serverless job (aarch64, Python 3.12), authenticates through its driver with
+the job's own token, and runs the full project.
 
 ## 10. Not built yet
 
-- A `prod` environment, to demonstrate dev → prod promotion
-- A remote Terraform state backend — state is currently local
-- Sustained cost of the now-permanent `wikipedia-ingest` job against Free
-  Edition's serverless allowance — pause with `ingest_pause_status = "PAUSED"`
-  if this becomes a concern
+- An hourly batch ingestion job, the source being Wikimedia pageviews (the
+  domain is reachable from Free Edition serverless), landing in a Volume and
+  merged by an incremental dbt model. It will run on dbt v2, the engine the
+  comparison favours.
+- Docs publishing for dbt v2. Its docs are a Parquet and DuckDB-WASM site rather
+  than `catalog.json`, so `scripts/publish-docs.sh` needs rework.
+- A full-refresh comparison between the engines, projects of other sizes, and the
+  Apache-2.0 `dbt-oss` distribution.
+- A `prod` environment, to demonstrate dev → prod promotion.
+- A remote Terraform state backend — state is currently local.
+- The Sail spike, paused until the comparison above was done; if resumed, it
+  runs inside Databricks.

@@ -1,0 +1,30 @@
+version: 2
+
+unit_tests:
+  - name: test_customer_orders_counts_totals_and_open_orders
+    model: int_tpch__customer_orders
+    given:
+      - input: ref('stg_orders')
+        rows:
+          - {customer_key: 1, ordered_at: "2020-01-01", order_total: 10, order_status: open}
+          - {customer_key: 1, ordered_at: "2020-02-01", order_total: 20, order_status: fulfilled}
+          - {customer_key: 2, ordered_at: "2021-05-05", order_total: 5, order_status: open}
+    expect:
+      rows:
+        - {customer_key: 1, orders: 2, total_ordered: 30, first_ordered_at: "2020-01-01", last_ordered_at: "2020-02-01", open_orders: 1}
+        - {customer_key: 2, orders: 1, total_ordered: 5, first_ordered_at: "2021-05-05", last_ordered_at: "2021-05-05", open_orders: 1}
+
+  - name: test_order_lines_report_days_to_ship_and_lateness
+    model: int_tpch__order_lines_enriched
+    given:
+      - input: ref('stg_order_lines')
+        rows:
+          - {order_line_key: a, order_key: 1, shipped_at: "2020-01-05", committed_at: "2020-01-10", received_at: "2020-01-12"}
+          - {order_line_key: b, order_key: 1, shipped_at: "2020-01-05", committed_at: "2020-01-10", received_at: "2020-01-09"}
+      - input: ref('stg_orders')
+        rows:
+          - {order_key: 1, customer_key: 7, ordered_at: "2020-01-01", order_status: open}
+    expect:
+      rows:
+        - {order_line_key: a, customer_key: 7, days_to_ship: 4, days_late: 2, is_late: true}
+        - {order_line_key: b, customer_key: 7, days_to_ship: 4, days_late: -1, is_late: false}

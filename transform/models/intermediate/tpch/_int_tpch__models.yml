@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: int_tpch__order_lines_enriched
+    description: >
+      A line item with the order it belongs to, and how long it took to ship and arrive.
+
+  - name: int_tpch__supplier_parts
+    description: >
+      Which supplier offers which part, at what cost, with the part and the supplier's place attached.
+
+  - name: int_tpch__customer_orders
+    description: >
+      How much and how often each customer has ordered.
+
+  - name: int_tpch__supplier_performance
+    description: >
+      How much each supplier shipped and how often it arrived late.
+
+  - name: int_tpch__part_demand
+    description: >
+      Units, revenue and buyers of each part in each year.

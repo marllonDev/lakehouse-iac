@@ -1,0 +1,278 @@
+version: 2
+
+models:
+  - name: dim_tpch_supplier
+    description: >
+      One row per supplier with the nation and region it sits in.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - supplier_key
+    columns:
+      - name: supplier_key
+        data_tests:
+          - not_null
+      - name: supplier_name
+        data_tests:
+          - not_null
+
+  - name: dim_tpch_part
+    description: >
+      One row per part.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - part_key
+    columns:
+      - name: part_key
+        data_tests:
+          - not_null
+      - name: retail_price
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: part_size
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+
+  - name: dim_tpch_customer_value
+    description: >
+      One row per customer with what they have ordered so far.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - customer_key
+    columns:
+      - name: customer_key
+        data_tests:
+          - not_null
+
+  - name: fct_tpch_order_lines
+    description: >
+      One row per order line: the largest table in the project, about thirty million rows.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - order_line_key
+    columns:
+      - name: order_line_key
+        data_tests:
+          - not_null
+      - name: order_key
+        data_tests:
+          - not_null
+      - name: part_key
+        data_tests:
+          - not_null
+      - name: supplier_key
+        data_tests:
+          - not_null
+      - name: return_flag
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['R', 'A', 'N']
+      - name: ship_mode
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['AIR', 'FOB', 'MAIL', 'RAIL', 'REG AIR', 'SHIP', 'TRUCK']
+      - name: discount_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 0.1
+                inclusive: true
+      - name: quantity
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 50
+                inclusive: true
+
+  - name: fct_tpch_supplier_parts
+    description: >
+      One row per part a supplier offers.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - part_key
+                - supplier_key
+    columns:
+      - name: part_key
+        data_tests:
+          - not_null
+      - name: supplier_key
+        data_tests:
+          - not_null
+      - name: supply_cost
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+  - name: agg_tpch_pricing_summary
+    description: >
+      Quantities and prices of every line, by return flag and order status (TPC-H's pricing summary).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - return_flag
+                - order_status
+    columns:
+      - name: return_flag
+        data_tests:
+          - not_null
+      - name: order_status
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_shipping_modes
+    description: >
+      How fast and how reliably each shipping mode delivers, against the days it promises.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - ship_mode
+    columns:
+      - name: ship_mode
+        data_tests:
+          - not_null
+      - name: late_share
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+
+  - name: agg_tpch_supplier_revenue
+    description: >
+      Revenue and delivery record of each supplier, ranked inside its region.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - supplier_key
+    columns:
+      - name: supplier_key
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_revenue_by_nation_year
+    description: >
+      Revenue by the customer's nation and the year of the order.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - nation_name
+                - order_year
+    columns:
+      - name: nation_name
+        data_tests:
+          - not_null
+      - name: order_year
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_brand_performance
+    description: >
+      Sales of each brand.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - brand
+                - manufacturer
+    columns:
+      - name: brand
+        data_tests:
+          - not_null
+      - name: manufacturer
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_part_type_margin
+    description: >
+      The margin between supply cost and retail price, by kind of part.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - part_type
+    columns:
+      - name: part_type
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_customer_segments
+    description: >
+      Customers and their spend by market segment.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - market_segment
+    columns:
+      - name: market_segment
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_late_deliveries
+    description: >
+      How many lines arrived after the committed date, by shipping month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - ship_month
+    columns:
+      - name: ship_month
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_priority_service
+    description: >
+      Whether higher-priority orders ship faster, and how many orders count once weighted by urgency.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - order_priority
+    columns:
+      - name: order_priority
+        data_tests:
+          - not_null
+
+  - name: agg_tpch_top_parts_by_year
+    description: >
+      The twenty-five parts that earned the most each year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - demand_year
+                - part_key
+    columns:
+      - name: part_key
+        data_tests:
+          - not_null
+      - name: demand_year
+        data_tests:
+          - not_null

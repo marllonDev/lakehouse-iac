@@ -1,0 +1,376 @@
+version: 2
+
+models:
+  - name: dim_wb_property
+    description: >
+      One row per rental property.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - property_id
+    columns:
+      - name: property_id
+        data_tests:
+          - not_null
+      - name: base_price
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+              config:
+                severity: warn
+
+  - name: dim_wb_host
+    description: >
+      One row per host.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - host_id
+    columns:
+      - name: host_id
+        data_tests:
+          - not_null
+
+  - name: dim_wb_user
+    description: >
+      One row per user, with how long they have had an account.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - user_id
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: user_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['individual', 'business']
+
+  - name: dim_wb_destination
+    description: >
+      One row per destination, with how many properties it holds.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - destination_id
+    columns:
+      - name: destination_id
+        data_tests:
+          - not_null
+
+  - name: fct_wb_bookings
+    description: >
+      One row per booking. Incremental: a run merges the bookings updated since the day before the newest one it already holds.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - booking_id
+    columns:
+      - name: booking_id
+        data_tests:
+          - not_null
+      - name: property_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_wb_property')
+                field: property_id
+              config:
+                severity: warn
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['pending', 'confirmed', 'cancelled', 'completed']
+      - name: user_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_wb_user')
+                field: user_id
+              config:
+                severity: warn
+      - name: nights
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+              config:
+                severity: warn
+
+  - name: fct_wb_payments
+    description: >
+      One row per payment. The source repeats some payment ids, so the latest row of each id is kept, which is what lets it merge on that key.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - payment_id
+    columns:
+      - name: payment_id
+        data_tests:
+          - not_null
+      - name: booking_id
+        data_tests:
+          - not_null
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['completed', 'refunded', 'failed']
+      - name: payment_method
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['paypal', 'credit_card', 'apple_pay', 'bank_transfer', 'google_pay']
+      - name: amount
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+              config:
+                severity: warn
+
+  - name: fct_wb_page_views
+    description: >
+      One row per page view, deduplicated on the view id.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - view_id
+    columns:
+      - name: view_id
+        data_tests:
+          - not_null
+      - name: viewed_at
+        data_tests:
+          - not_null
+      - name: device_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['tablet', 'mobile', 'desktop']
+
+  - name: fct_wb_reviews
+    description: >
+      One row per review that was not deleted, deduplicated on the review id.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - review_id
+    columns:
+      - name: review_id
+        data_tests:
+          - not_null
+      - name: property_id
+        data_tests:
+          - not_null
+      - name: rating
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5
+                inclusive: true
+
+  - name: fct_wb_support_messages
+    description: >
+      One row per support message.
+    columns:
+      - name: ticket_id
+        data_tests:
+          - not_null
+      - name: sender
+        data_tests:
+          - not_null
+
+  - name: agg_wb_occupancy_by_destination_month
+    description: >
+      Bookings, nights, revenue and cancellations by stay month and destination.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - stay_month
+                - destination_id
+    columns:
+      - name: stay_month
+        data_tests:
+          - not_null
+      - name: destination_id
+        data_tests:
+          - not_null
+
+  - name: agg_wb_revenue_by_host
+    description: >
+      Revenue and bookings per host.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - host_id
+    columns:
+      - name: host_id
+        data_tests:
+          - not_null
+
+  - name: agg_wb_rating_by_property_type
+    description: >
+      How guests rate each kind of property.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - property_type
+    columns:
+      - name: property_type
+        data_tests:
+          - not_null
+
+  - name: agg_wb_conversion_funnel
+    description: >
+      For each property, how many people looked and how many booked.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - property_id
+    columns:
+      - name: property_id
+        data_tests:
+          - not_null
+
+  - name: agg_wb_session_metrics
+    description: >
+      Sessions per day, and how long and busy they were.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - session_date
+    columns:
+      - name: session_date
+        data_tests:
+          - not_null
+
+  - name: agg_wb_cancellation_rate_by_month
+    description: >
+      The share of bookings that were cancelled, by the month they were made.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - booking_month
+    columns:
+      - name: booking_month
+        data_tests:
+          - not_null
+      - name: cancellation_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+
+  - name: agg_wb_payment_method_mix
+    description: >
+      Payments and money by method and outcome, with the fees the method would charge.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - payment_method
+                - status
+    columns:
+      - name: payment_method
+        data_tests:
+          - not_null
+      - name: status
+        data_tests:
+          - not_null
+
+  - name: agg_wb_user_ltv
+    description: >
+      Lifetime spend per user, with the decile of spend they fall in.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - user_id
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: spend_decile
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 10
+                inclusive: true
+
+  - name: agg_wb_seasonality
+    description: >
+      Which months each kind of property gets booked in, and at what nightly price.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - check_in_month
+                - property_type
+    columns:
+      - name: check_in_month
+        data_tests:
+          - not_null
+      - name: property_type
+        data_tests:
+          - not_null
+
+  - name: agg_wb_top_properties
+    description: >
+      The ten properties that earned the most in each destination.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - destination_id
+                - property_id
+    columns:
+      - name: destination_id
+        data_tests:
+          - not_null
+      - name: property_id
+        data_tests:
+          - not_null
+
+  - name: agg_wb_support_sentiment
+    description: >
+      The tone of support messages, by who sent them.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+              combination_of_columns:
+                - sender
+                - sentiment
+    columns:
+      - name: sender
+        data_tests:
+          - not_null
+      - name: sentiment
+        data_tests:
+          - not_null

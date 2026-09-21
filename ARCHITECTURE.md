@@ -9,8 +9,8 @@ the project folder by folder. This file is the picture that ties both together.
 ## 1. System overview
 
 This is deliberately the *static* picture — what exists and what contains
-what. The *dynamic* picture, what happens when the job actually runs, is §6's
-sequence diagram; splitting the two keeps either one readable.
+what. The *dynamic* picture, what happens when a dbt job runs, is §6's
+sequence diagram.
 
 ```mermaid
 flowchart LR
@@ -18,39 +18,34 @@ flowchart LR
     human["terraform apply<br/>(run by a human, not CI)"]
 
     subgraph dbx ["Databricks Free Edition — catalog dev_lakehouse"]
-        raw[("schema: raw<br/>volume: landing")]
-        staging[("schema: staging<br/>5 views + 1 streaming table")]
-        marts[("schema: marts<br/>5 tables")]
+        staging[("schema: staging<br/>49 staging + 25 intermediate views")]
+        marts[("schema: marts<br/>72 tables, 2 snapshots")]
         wh["SQL Warehouse<br/>Serverless Starter<br/>(looked up, not created)"]
-        ingestjob["Job: wikipedia-ingest<br/>continuous"]
-        transformjob["Job: wikipedia-transform<br/>every 5 min"]
+        nativejob["Job: tpch-batch<br/>dbt Core · dbt_task"]
+        corejob["Job: dbt-core<br/>dbt Core · run_dbt.py"]
+        v2job["Job: dbt-v2<br/>dbt v2 · run_dbt.py"]
     end
 
-    tpch["samples.tpch<br/>(built into the workspace)"]
-    wiki["stream.wikimedia.org<br/>recentchange firehose"]
+    samples["samples.tpch, tpcds_sf1,<br/>wanderbricks, clickbench<br/>(built into the workspace)"]
 
     repo --> human
-    human ==>|"creates catalog, schemas,<br/>grants, volume, both jobs"| dbx
-    ingestjob -.->|"clones at run time"| repo
-    transformjob -.->|"clones at run time"| repo
+    human ==>|"creates catalog, schemas,<br/>grants, the jobs"| dbx
+    nativejob -.->|"clones git_branch"| repo
+    corejob -.->|"clones the same git_branch"| repo
+    v2job -.->|"clones the same git_branch"| repo
 
-    wiki --> ingestjob
-    ingestjob --> raw
-    tpch --> staging
-    raw -->|"Auto Loader, incremental"| staging
-    staging -->|"merge, incremental"| marts
-    wh --- transformjob
+    samples --> staging
+    staging -->|"joins, aggregates,<br/>incremental merges"| marts
+    wh --- nativejob
+    wh --- corejob
+    wh --- v2job
 ```
 
-No dependency runs between the two jobs — that is the point of splitting them,
-covered in §7. Two data paths share one platform:
-
-| | Batch | Streaming |
-|---|---|---|
-| Source | `samples.tpch` (already in the workspace) | Wikimedia EventStreams (public internet) |
-| Entry point | dbt reads it directly | A Python job lands it as files first |
-| Trigger | Manual (`dbt build`) | Ingestion: continuous. Transform: every 5 minutes. |
-| Landing | — (queried in place) | Volume `dev_lakehouse.raw.landing` |
+Every job builds the same 553 nodes from the same project, and none depends on
+another. `dbt-core` and `dbt-v2` differ in one thing: the dbt engine. They share
+the runner, the serverless environment version, the branch and the warehouse, so
+that a difference between them can only come from the engine. `tpch-batch` is
+the native `dbt_task` reference.
 
 ---
 
@@ -58,27 +53,17 @@ covered in §7. Two data paths share one platform:
 
 This is the one rule the whole project is built around:
 
-> **Terraform owns the containers. dbt owns what is inside them. Databricks
-> creates some things implicitly, on its own, that neither tool ever declares.**
+> **Terraform owns the containers and the jobs. dbt owns what is inside the
+> containers.**
 
 | Object | Created by | How |
 |---|---|---|
 | Catalog `dev_lakehouse` | Terraform | `terraform_data.catalog` → shells out to `scripts/uc-catalog.sh` (SQL, not REST — see §5) |
-| Schemas `raw`, `staging`, `marts` | Terraform | `databricks_schema` resource |
+| Schemas `staging`, `marts` | Terraform | `databricks_schema` resource |
 | Grants | Terraform | `databricks_grants` resource |
-| Volume `raw.landing` | Terraform | `databricks_volume` resource |
-| Jobs `dev-lakehouse-wikipedia-ingest` and `-transform` | Terraform | Two `databricks_job` resources, no dependency between them, in [infra/streaming.tf](infra/streaming.tf) |
-| Views, streaming table, mart tables | dbt | `dbt build`, run either locally or by the job's `transform` task |
-| The Lakeflow pipeline behind the streaming table | **Databricks, implicitly** | Created the moment `CREATE STREAMING TABLE ... read_files(...)` executes. Neither Terraform nor dbt ever names it. |
-| Directories inside the volume | **The ingestion script** | `os.makedirs()` — the volume resource creates the volume, not its subfolders |
-
-That fourth row is worth pausing on, since it answers a question worth asking
-explicitly: **a streaming table is not just a table.** Running its `CREATE`
-statement makes Databricks spin up a background Lakeflow pipeline that owns
-the actual Auto Loader checkpoint and keeps the table refreshed. dbt issues
-the SQL; Databricks manages the pipeline underneath it for the table's
-lifetime. It appears in the Databricks UI as a pipeline, and it exists whether
-or not anyone ever runs `databricks pipelines list-pipelines`.
+| Jobs `dev-lakehouse-tpch-batch`, `dev-lakehouse-dbt-core` and `dev-lakehouse-dbt-v2` | Terraform | `databricks_job` resources, in [infra/batch.tf](infra/batch.tf) and, one per engine through `for_each`, [infra/bench.tf](infra/bench.tf) |
+| Views, mart tables, seeds and snapshots | dbt | `dbt build`, run by any job |
+| The token dbt v2 authenticates with | **The job's identity** | Fetched at run time through the Databricks SDK; never stored anywhere |
 
 ---
 
@@ -90,11 +75,11 @@ and they are not interchangeable:
 | Tool | What it actually did here | Persists? |
 |---|---|---|
 | **Terraform** | Defines every resource in §2's "Terraform" rows. This is the only tool whose output is durable — delete `infra/*.tf` and re-apply, and the platform is rebuilt from nothing. | Yes — this is the source of truth. |
-| **dbt** | Defines every model and test under `transform/models/`. Runs either from a laptop or from the job's `transform` task. | Yes — model definitions live in the repo; the tables themselves are dbt's output. |
+| **dbt** | Defines every model and test under `transform/`. Runs in the Databricks jobs; a laptop could run it too, but nothing depends on that. | Yes — model definitions live in the repo; the tables themselves are dbt's output. |
 | **Databricks CLI** (`databricks ...`) | Used throughout development to probe what Free Edition actually allows, trigger job runs by hand, read run logs, and clean up test artifacts. Every diagnostic command in this project's history — "does creating a catalog work over the REST API", "did the job actually run" — went through the CLI. | No — a CLI command is one API call. Nothing about the platform depends on the CLI having been run; it is an operator's tool, not infrastructure. |
 | **Databricks MCP server** | Set up once for exactly this kind of exploratory work, never invoked — every Databricks interaction in this project went through the CLI directly, because the CLI was already the project's own pinned tool ([scripts/install-tools.sh](scripts/install-tools.sh)) and needed no separate wiring. Removed from the repository since. | No — same as the CLI: an interface, not a resource. |
 
-Plainly: **the job and the pipeline are Terraform resources.** The CLI and the
+Plainly: **the jobs are Terraform resources.** The CLI and the
 MCP server are ways of *looking at* and *poking* a Databricks workspace; they
 were used here to figure out what Free Edition permits before writing the
 Terraform that encodes it. Neither one is a deployment mechanism for this
@@ -177,49 +162,37 @@ Both are documented in code comments at the point they matter, not only here.
 
 ---
 
-## 6. What happens across the two jobs
+## 6. What happens when a dbt job runs
 
-These are two separate `databricks_job` resources with no dependency between
-them — not two tasks in one job. That distinction is the subject of §7's first
-decision below; the short version is that an earlier single-job version could
-never actually run dbt once ingestion became always-on, because the task
-graph made the build wait for ingestion to finish, and an always-on task never
-finishes.
+`dbt_task` supports only dbt Core, so the `dbt-core` and `dbt-v2` jobs use a
+Python task of their own. This is the v2 one; the Core one is identical except
+for the package it installs.
 
 ```mermaid
 sequenceDiagram
+    participant C as databricks jobs run-now
+    participant J as Job: dbt-v2
     participant G as GitHub (git_source)
-    participant I as Job: wikipedia-ingest
-    participant W as Wikimedia firehose
-    participant V as Volume raw.landing
-    participant S as Scheduler
-    participant T as Job: wikipedia-transform
-    participant D as dbt (in job env)
-    participant U as Unity Catalog
+    participant R as jobs/run_dbt.py
+    participant D as dbt v2 (pip, pinned)
+    participant W as SQL warehouse
 
-    Note over I: continuous — restarts itself if it ever exits
-    I->>G: clone main branch
-    I->>W: open SSE connection
-    loop every batch_seconds, forever
-        W-->>I: recentchange events
-        I->>V: flush one immutable JSON file
-    end
-
-    Note over T: independent schedule — every 5 minutes
-    S->>T: cron fires
-    T->>G: clone main branch
-    T->>D: dbt deps && dbt build --select st_wikipedia_edits+
-    D->>V: Auto Loader reads whatever files are new
-    D->>U: MERGE into fct_wikipedia_edits, rebuild agg_wikipedia_activity
-    D-->>T: PASS=15 ERROR=0
+    C->>J: python_params: --engine v2 --command build --report
+    J->>G: clone the configured branch
+    J->>J: environment v6, pip install dbt==2.0.6
+    J->>R: run the script
+    R->>R: token from the job identity (Databricks SDK)
+    R->>R: copy transform/ to local disk, write a throwaway profile
+    R->>D: dbt deps, parse, compile, build
+    D->>W: SQL over the ADBC driver
+    W-->>D: results
+    D-->>R: 553 nodes
+    R->>W: checksum of every relation (with --report)
+    R-->>J: RESULT, NODES, WAREHOUSE and PARITY lines
 ```
 
-Splitting them this way also means a dbt failure never loses events already
-landed — they simply wait in the volume for the next successful transform run,
-whenever that is, since Auto Loader's checkpoint doesn't care how long a file
-has been sitting there.
-
----
+The `tpch-batch` job is the same shape without the runner: `dbt_task` generates
+its own profile and runs the commands.
 
 ## 7. Decisions worth recording
 
@@ -229,51 +202,41 @@ Short-form ADRs — the choice, and the alternative it beat.
 |---|---|---|
 | Catalog creation | SQL statement via `local-exec` | The native `databricks_catalog` resource — fails outright on Free Edition |
 | Warehouse | `data` source (lookup) | `resource` (create) — Free Edition allows exactly one, already provisioned |
-| Ingestion vs. transform | **Two separate jobs**, no dependency between them | Two tasks in one job with `depends_on` — the first working version. It ran fine in scheduled/windowed mode, but the whole point of making ingestion always-on is that it never exits, and a task gated on a task that never exits never starts. That version could not have run dbt at all once ingestion stopped being windowed. |
-| Wikipedia event key | `meta.id` (UUID) | Surrogate key over `(wiki, recent_change_id)` — collided, because `recent_change_id` is null on most `log` events and the surrogate hash maps every null to the same value |
-| Job environments | Two (`ingest`, `dbt`) | One shared environment — would force the ingestion task to wait on dbt's dependency install before opening the stream connection |
 | dbt task catalog | Declared explicitly on `dbt_task` | Relying on `profiles.yml` — a `dbt_task` generates its own profile at run time and ignores the repository's, defaulting to the legacy Hive metastore |
-| Transform schedule interval | 5 minutes | 3 minutes, tried first — died on its second trigger with `MAX_CONCURRENT_RUNS_EXCEEDED`. A cold run (fresh environment, first execution) measured 254.7 seconds; two warm runs after that measured 106–115 seconds. Five minutes clears both. |
-| Job/pipeline IaC | Terraform, alongside catalog governance | A Databricks Asset Bundle — would split one platform across two state files for no capability this project needs (see §4) |
-| Ingestion cadence | Always-on (`continuous`), pausable via `ingest_pause_status` | A triggered/continuous toggle spanning the whole pipeline — the toggle used to exist, but "continuous" under the old single-job design silently never built anything (see the first row above). Splitting the jobs made the toggle meaningless: ingestion just always runs continuously now, cheaply, since it holds an idle socket rather than warehouse compute; only the transform job's schedule is a cost/latency knob. |
+| Job IaC | Terraform, alongside catalog governance | A Databricks Asset Bundle — would split one platform across two state files for no capability this project needs (see §4) |
+| Where dbt runs | Databricks jobs | A developer machine. Nothing in the workflow depends on a local dbt; the local machine edits code, runs Terraform, and calls the CLI |
+| How dbt v2 runs | A Python task running `jobs/run_dbt.py` | `dbt_task` — documented for dbt Core with `dbt-databricks` only, its examples pin `<2.0.0` |
+| dbt v2 authentication | `auth_type: token`, token from the job's identity via the SDK | OAuth U2M: the v2 adapter has no Databricks-CLI flow, only external-browser OAuth, and a token-expiry bug (dbt-labs/dbt#14317) is closed but was marked `needs-repro`. A personal access token would work but needs a secret |
+| Runner working directory | A scratch copy of `transform/` on local disk | Running from the Git checkout — under `/Workspace/Repos/.internal` a native process cannot create directories (`os error 22`), and dbt v2 needs `logs/`, `target/` and `dbt_packages/` |
+| dbt v2 pinning | Exact version in Terraform | A range — the package is a sdist that fetches binaries when pip builds it, so `uv.lock` cannot make two installs identical, and a range would let two runs of one commit execute different builds |
+| Base environment | Serverless environment version 6 for every dbt job, from one variable | Version 3 for Core and 6 for v2, which is what the first timings did: a comparison across two environments says nothing about the engines |
+| Comparing the engines | The same runner, environment, branch, warehouse and thread count; one job at a time; alternating order after a warm-up; medians | Timing the native `dbt_task` against a Python task: a different code path, a different environment, and no way to separate dbt from the warehouse |
+| Separating dbt from the warehouse | The warehouse's own query history: the time at least one statement was running, against the build's wall time | Summing per-node times, which counts parallel work several times |
+| Judging correctness | Node ids and statuses, then a row count and two whole-row checksums per relation, with a run of each engine against itself as the noise floor | Comparing only Core against v2: four aggregates differ on every run under either engine, which a single comparison would blame on the engine |
+| Model authoring at scale | Models written as data in `scripts/generate/`, generated and committed | Hand-writing 140 SQL files and their YAML: every fix would be repeated by hand across files |
+| Streaming | Removed | Kept alongside batch. The project moved to batch ingestion; the streaming design and what it taught stay in the git history |
 
 ---
 
-## 8. What "dbt docs" would add
+## 8. Current inventory
 
-Not built yet, so worth explaining what it is rather than leaving it as a bare
-line item.
-
-`dbt docs generate` reads the compiled project — every model, every test,
-every `ref()` and `source()` — and writes a static website: one page per
-model showing its compiled SQL, its columns and descriptions, its tests, and
-crucially a **lineage graph**: an interactive diagram of every model's
-upstream and downstream dependencies, clickable, for the whole project at
-once. `dbt docs serve` runs it locally; the same output directory can be
-published anywhere static files can be hosted — GitHub Pages, an S3 bucket, a
-Databricks app — since it is plain HTML/CSS/JS with no server-side component.
-
-For this project it would render, automatically and always in sync with the
-code, the exact picture §1's hand-drawn diagram approximates by hand — plus
-every column-level description already written in the `_*.yml` files.
-
----
-
-## 9. Current inventory
-
-Everything below exists in the live workspace as of the last verified run.
+Everything below exists in the live workspace, on the branch
+`feat/dbt-v2-sail-spike`.
 
 | | |
 |---|---|
 | Catalog | `dev_lakehouse` |
-| Schemas | `raw`, `staging`, `marts` |
-| Volume | `dev_lakehouse.raw.landing` |
+| Schemas | `staging`, `marts` |
 | Warehouse (looked up, not owned) | `Serverless Starter Warehouse` |
-| Ingest job | `dev-lakehouse-wikipedia-ingest`, continuous |
-| Transform job | `dev-lakehouse-wikipedia-transform`, schedule `0 0/5 * * * ?` |
-| Batch models | 5 staging views, `dim_customers`, `fct_orders`, `agg_sales_by_month` |
-| Streaming models | `st_wikipedia_edits` (streaming table), `fct_wikipedia_edits`, `agg_wikipedia_activity` |
-| Last verified transform run | PASS=15 ERROR=0, 106.5s (warm) |
-| Measured latency, edit to queryable row | p50 124s · p90 250s · max 313s |
+| Reference job | `dev-lakehouse-tpch-batch`, dbt Core through `dbt_task`, no trigger |
+| Engine jobs | `dev-lakehouse-dbt-core` and `dev-lakehouse-dbt-v2`, no trigger, `jobs/run_dbt.py` |
+| Serverless environment | Version 6, every dbt job |
+| dbt engines | Core 1.12 with `dbt-databricks` 1.12.4; v2 `dbt==2.0.6` |
+| Models | 146: 49 staging, 25 intermediate, 72 marts |
+| Other dbt objects | 3 seeds, 2 snapshots, 398 data tests, 4 unit tests |
+| Nodes per build | 553, building 151 relations |
+| Result of the comparison | Same nodes and same data; v2 parses about 11x and compiles about 6x faster, and builds 8% faster |
+| Not yet proven | A full refresh under either engine, the `dbt-oss` distribution, docs publishing for v2 |
 
-See [SPEC.md](SPEC.md) §9 for the full breakdown with row counts.
+See [BENCHMARK.md](BENCHMARK.md) for the comparison and [SPEC.md](SPEC.md) §9 and
+§10 for the detail and for what comes next.

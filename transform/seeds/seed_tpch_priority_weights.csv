@@ -1,0 +1,6 @@
+order_priority,priority_weight
+1-URGENT,5
+2-HIGH,4
+3-MEDIUM,3
+4-NOT SPECIFIED,2
+5-LOW,1

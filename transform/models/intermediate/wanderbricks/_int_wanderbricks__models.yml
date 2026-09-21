@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: int_wb__bookings_enriched
+    description: >
+      A booking with its property, destination and guest attached, and the length of the stay.
+
+  - name: int_wb__booking_payments
+    description: >
+      What was paid, refunded and attempted for each booking.
+
+  - name: int_wb__property_reviews
+    description: >
+      Review counts and ratings per property, ignoring deleted reviews.
+
+  - name: int_wb__property_catalog
+    description: >
+      A property with its host, destination and how many amenities it offers.
+
+  - name: int_wb__user_events
+    description: >
+      Every page view and click in one event stream, with the device it came from.
+
+  - name: int_wb__sessions
+    description: >
+      Events grouped into sessions: a gap of more than thirty minutes starts a new one.
+
+  - name: int_wb__support_messages
+    description: >
+      One row per message of a support ticket, unnested from the array it is stored in.
+
+  - name: int_wb__host_portfolio
+    description: >
+      A host with how many properties they list and at what price.
